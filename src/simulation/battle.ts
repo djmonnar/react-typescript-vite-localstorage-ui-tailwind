@@ -39,6 +39,7 @@ interface Combatant {
   damageDone: number;
   moveCount: number;
   tilesMoved: number;
+  deathProcessed: boolean;
 }
 
 interface DamageResult {
@@ -204,6 +205,7 @@ function expandDeployment(data: AppData, preset: BattlePreset, team: 'A' | 'B', 
       damageDone: 0,
       moveCount: 0,
       tilesMoved: 0,
+      deathProcessed: false,
     });
     order += 1;
   }
@@ -502,6 +504,7 @@ function activateSkill(
       const damage = applySkillDamage(caster, target, skill, data);
       totalApplied += damage;
       stat.damage += damage;
+      handleDefeat(target, caster, combatants, data, time, context);
     }
 
     if (skill.effectType === 'heal') {
@@ -603,11 +606,35 @@ function triggerSkills(
   time: number,
   context: SkillContext,
 ) {
+  if (caster.hp <= 0 && trigger !== 'onDeath') return;
   for (const skill of caster.unit.skillsV2 ?? []) {
     if (skill.trigger !== trigger) continue;
     if (trigger === 'cooldown' && skill.cooldown <= 0) continue;
     if (trigger === 'lowHp' && hpRatio(caster) > 0.3) continue;
     activateSkill(caster, skill, combatants, data, time, context);
+  }
+}
+
+function handleDefeat(
+  defeated: Combatant,
+  killer: Combatant | undefined,
+  combatants: Combatant[],
+  data: AppData,
+  time: number,
+  context: SkillContext,
+) {
+  if (defeated.hp > 0 || defeated.deathProcessed) return;
+  defeated.deathProcessed = true;
+
+  context.logs.push(`[${time.toFixed(2).padStart(6, '0')}] DOWN: ${defeated.team}:${defeated.unit.name}`);
+  triggerSkills(defeated, 'onDeath', combatants, data, time, { ...context, currentTarget: killer });
+
+  if (killer && killer.hp > 0) {
+    triggerSkills(killer, 'onKill', combatants, data, time, { ...context, currentTarget: defeated });
+  }
+
+  for (const ally of alive(combatants, defeated.team)) {
+    triggerSkills(ally, 'allyDeath', combatants, data, time, { ...context, currentTarget: defeated });
   }
 }
 
@@ -1069,9 +1096,9 @@ export function simulateBattle(
             `[${time.toFixed(2).padStart(6, '0')}] ${actor.team}:${actor.unit.name}(${actor.tile.x},${actor.tile.y}) -> ${targetInRange.team}:${targetInRange.unit.name}(${targetInRange.tile.x},${targetInRange.tile.y}) DMG ${damage} x${damageResult.multiplier} (S-${shieldDelta}, HP-${hpDelta})`,
           );
         }
-        if (defeated) logs.push(`[${time.toFixed(2).padStart(6, '0')}] DOWN: ${targetInRange.team}:${targetInRange.unit.name}`);
+        handleDefeat(targetInRange, actor, combatants, data, time, skillContext);
 
-        triggerSkills(targetInRange, 'onHit', combatants, data, time, { ...skillContext, currentTarget: actor });
+        if (!defeated) triggerSkills(targetInRange, 'onHit', combatants, data, time, { ...skillContext, currentTarget: actor });
         triggerSkills(actor, 'onAttack', combatants, data, time, { ...skillContext, currentTarget: targetInRange });
         actor.nextAttackAt = round2(time + combatantCooldown(actor));
         continue;
