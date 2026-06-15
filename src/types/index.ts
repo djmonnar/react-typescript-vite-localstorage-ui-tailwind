@@ -177,6 +177,7 @@ export interface Skill {
   maxActivations?: number;
   tags?: string[];
   area?: SkillArea;
+  attackTypeId?: Id;
   conditionLogic?: ConditionLogic;
   conditions?: SkillCondition[];
   notes: string;
@@ -454,6 +455,7 @@ export interface BattleReplaySkillEvent extends BattleReplayBaseEvent {
   targetNames: string[];
   targetTiles?: Record<Id, GridTile>;
   effectType: SkillEffectType;
+  attackTypeId?: Id;
   value: number;
   valueType?: Skill['valueType'];
   duration?: number;

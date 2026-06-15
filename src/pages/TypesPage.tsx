@@ -518,6 +518,7 @@ export function TypesPage({ data, setData }: TypesPageProps) {
 
       {activePanel === 'skills' ? (
         <SkillTemplateSettings
+          attackTypes={data.attackTypes}
           onAdd={addSkill}
           onAddPreset={addSkillPreset}
           onDelete={deleteSkill}
@@ -697,6 +698,7 @@ function TraitSettings({
 }
 
 function SkillTemplateSettings({
+  attackTypes,
   onAdd,
   onAddPreset,
   onDelete,
@@ -709,6 +711,7 @@ function SkillTemplateSettings({
   skills,
   tags,
 }: {
+  attackTypes: AttackType[];
   onAdd: () => void;
   onAddPreset: () => void;
   onDelete: () => void;
@@ -722,6 +725,11 @@ function SkillTemplateSettings({
   tags: string[];
 }) {
   const area = selectedSkill?.area ?? { type: 'single' as const };
+  const attackTypeOptions = ['', ...attackTypes.map((type) => type.id)];
+  const attackTypeLabels = Object.fromEntries([
+    ['', '유닛 기본 타입'],
+    ...attackTypes.map((type) => [type.id, type.name]),
+  ]);
   const toggleTag = (tag: string) => {
     if (!selectedSkill) return;
     const current = selectedSkill.tags ?? [];
@@ -740,12 +748,15 @@ function SkillTemplateSettings({
         </select>
         <button className="btn btn-primary" onClick={onAddPreset} type="button"><Plus size={16} />프리셋에서 추가</button>
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {skills.map((skill) => (
-          <button className={`shrink-0 rounded-md border px-3 py-2 text-sm ${selectedSkill?.id === skill.id ? 'border-cyan bg-cyan/15 text-cyan' : 'border-line bg-[#0f141d] text-muted'}`} key={skill.id} onClick={() => onSelect(skill.id)} type="button">
-            {skill.name}
-          </button>
-        ))}
+      <div>
+        <span className="label">내가 만든 공용 스킬</span>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {skills.map((skill) => (
+            <button className={`shrink-0 rounded-md border px-3 py-2 text-sm ${selectedSkill?.id === skill.id ? 'border-cyan bg-cyan/15 text-cyan' : 'border-line bg-[#0f141d] text-muted'}`} key={skill.id} onClick={() => onSelect(skill.id)} type="button">
+              {skill.name}
+            </button>
+          ))}
+        </div>
       </div>
       {selectedSkill ? (
         <div className="space-y-3 rounded-md border border-line bg-[#10151f] p-3">
@@ -763,6 +774,9 @@ function SkillTemplateSettings({
             <SelectField label="발동 조건" labels={skillTriggerLabels} onChange={(trigger) => onUpdate({ trigger: trigger as SkillTrigger })} options={skillTriggers} value={selectedSkill.trigger} />
             <SelectField label="대상" labels={skillTargetLabels} onChange={(target) => onUpdate({ target: target as SkillTarget })} options={skillTargets} value={selectedSkill.target} />
             <SelectField label="효과" labels={skillEffectLabels} onChange={(effectType) => onUpdate({ effectType: effectType as SkillEffectType })} options={skillEffects} value={selectedSkill.effectType} />
+            {selectedSkill.effectType === 'damage' ? (
+              <SelectField label="피해 타입" labels={attackTypeLabels} onChange={(attackTypeId) => onUpdate({ attackTypeId: attackTypeId || undefined })} options={attackTypeOptions} value={selectedSkill.attackTypeId ?? ''} />
+            ) : null}
             <SelectField label="수치 타입" labels={skillValueTypeLabels} onChange={(valueType) => onUpdate({ valueType: valueType as Skill['valueType'] })} options={['flat', 'percent']} value={selectedSkill.valueType} />
             <NumberStepper label="수치" min={-999} onChange={(value) => onUpdate({ value })} value={selectedSkill.value} />
             <NumberStepper label="쿨타임" onChange={(cooldown) => onUpdate({ cooldown })} step={0.5} value={selectedSkill.cooldown} />

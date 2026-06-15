@@ -8,7 +8,7 @@ import { SkillConditionBuilder } from '../components/SkillConditionBuilder';
 import { TextField } from '../components/TextField';
 import { UnitIcon } from '../components/UnitIcon';
 import { createSkillFromPreset, skillPresets } from '../data/presets';
-import type { AppData, Race, Skill, SkillArea, SkillEffectType, SkillTarget, SkillTrigger, Unit } from '../types';
+import type { AppData, AttackType, Race, Skill, SkillArea, SkillEffectType, SkillTarget, SkillTrigger, Unit } from '../types';
 import { createId, nowIso } from '../utils/ids';
 import {
   formatSkillAutoDescription,
@@ -59,6 +59,12 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
       setSelectedUnitId(factionUnits[0]?.id ?? '');
     }
   }, [factionUnits, selectedUnit, selectedUnitId]);
+
+  useEffect(() => {
+    if (!data.skillTemplates.some((skill) => skill.id === selectedSkillTemplateId)) {
+      setSelectedSkillTemplateId(data.skillTemplates[0]?.id ?? '');
+    }
+  }, [data.skillTemplates, selectedSkillTemplateId]);
 
   const syncFactionUnitIds = (units: Unit[], factions: Race[]) =>
     factions.map((faction) => {
@@ -198,6 +204,7 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
         duration: 0,
         tags: [],
         area: { type: 'single' },
+        attackTypeId: undefined,
         notes: '',
       },
     ]);
@@ -222,6 +229,11 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
         name: template.name,
         tags: [...(template.tags ?? [])],
         area: template.area ? { ...template.area } : { type: 'single' },
+        conditions: (template.conditions ?? []).map((condition) => ({
+          ...condition,
+          id: createId('condition'),
+          tags: [...(condition.tags ?? [])],
+        })),
       },
     ]);
   };
@@ -234,6 +246,23 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
   const duplicateSkill = (skill: Skill) => {
     if (!selectedUnit) return;
     setSkillsV2([...(selectedUnit.skillsV2 ?? []), { ...skill, id: createId('skill'), name: `${skill.name} 복제` }]);
+  };
+
+  const saveSkillAsTemplate = (skill: Skill) => {
+    const template: Skill = {
+      ...skill,
+      id: createId('skill'),
+      name: `${skill.name} 공용`,
+      tags: [...(skill.tags ?? [])],
+      area: skill.area ? { ...skill.area } : { type: 'single' },
+      conditions: (skill.conditions ?? []).map((condition) => ({
+        ...condition,
+        id: createId('condition'),
+        tags: [...(condition.tags ?? [])],
+      })),
+    };
+    setData((current) => ({ ...current, skillTemplates: [...current.skillTemplates, template] }));
+    setSelectedSkillTemplateId(template.id);
   };
 
   const deleteSkill = (skillId: string) => {
@@ -489,6 +518,7 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
             </div>
             <SkillSection
               availableTags={availableTags}
+              attackTypes={data.attackTypes}
               selectedSkillPreset={selectedSkillPreset}
               selectedSkillTemplateId={selectedSkillTemplateId}
               setSelectedSkillPreset={setSelectedSkillPreset}
@@ -500,6 +530,7 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
               onAddSkillTemplate={addSkillTemplate}
               onDeleteSkill={deleteSkill}
               onDuplicateSkill={duplicateSkill}
+              onSaveSkillTemplate={saveSkillAsTemplate}
               onUpdateSkill={updateSkill}
             />
           </FormSection>
@@ -591,11 +622,13 @@ function TagEditor({
 
 function SkillSection({
   availableTags,
+  attackTypes,
   onAddSkill,
   onAddSkillPreset,
   onAddSkillTemplate,
   onDeleteSkill,
   onDuplicateSkill,
+  onSaveSkillTemplate,
   onUpdateSkill,
   selectedSkillPreset,
   selectedSkillTemplateId,
@@ -605,6 +638,7 @@ function SkillSection({
   skills,
 }: {
   availableTags: string[];
+  attackTypes: AttackType[];
   selectedSkillPreset: string;
   selectedSkillTemplateId: string;
   setSelectedSkillPreset: (value: string) => void;
@@ -616,6 +650,7 @@ function SkillSection({
   onAddSkillTemplate: () => void;
   onDeleteSkill: (skillId: string) => void;
   onDuplicateSkill: (skill: Skill) => void;
+  onSaveSkillTemplate: (skill: Skill) => void;
   onUpdateSkill: (skillId: string, patch: Partial<Skill>) => void;
 }) {
   return (
@@ -661,12 +696,31 @@ function SkillSection({
           공용 스킬에서 추가
         </button>
       </div>
+      {skillTemplates.length > 0 ? (
+        <div>
+          <span className="label">내가 만든 공용 스킬</span>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {skillTemplates.map((skill) => (
+              <button
+                className={`shrink-0 rounded-md border px-3 py-2 text-sm font-semibold ${selectedSkillTemplateId === skill.id ? 'border-cyan bg-cyan/15 text-cyan' : 'border-line bg-[#10151f] text-muted'}`}
+                key={skill.id}
+                onClick={() => setSelectedSkillTemplateId(skill.id)}
+                type="button"
+              >
+                {skill.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {skills.map((skill) => (
         <SkillEditor
           availableTags={availableTags}
+          attackTypes={attackTypes}
           key={skill.id}
           onDelete={() => onDeleteSkill(skill.id)}
           onDuplicate={() => onDuplicateSkill(skill)}
+          onSaveTemplate={() => onSaveSkillTemplate(skill)}
           onUpdate={(patch) => onUpdateSkill(skill.id, patch)}
           skill={skill}
         />
@@ -696,20 +750,29 @@ function FormSection({ title, children }: { title: string; children: ReactNode }
 
 function SkillEditor({
   availableTags,
+  attackTypes,
   onDelete,
   onDuplicate,
+  onSaveTemplate,
   onUpdate,
   skill,
 }: {
   availableTags: string[];
+  attackTypes: AttackType[];
   onDelete: () => void;
   onDuplicate: () => void;
+  onSaveTemplate: () => void;
   onUpdate: (patch: Partial<Skill>) => void;
   skill: Skill;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const autoDescription = formatSkillAutoDescription(skill);
   const area = skill.area ?? { type: 'single' as const };
+  const attackTypeOptions = ['', ...attackTypes.map((type) => type.id)];
+  const attackTypeLabels = Object.fromEntries([
+    ['', '유닛 기본 타입'],
+    ...attackTypes.map((type) => [type.id, type.name]),
+  ]);
 
   return (
     <div className="rounded-md border border-line bg-[#10151f] p-3">
@@ -724,6 +787,9 @@ function SkillEditor({
           </div>
         </div>
         <div className="flex gap-2">
+          <button className="btn" onClick={onSaveTemplate} type="button">
+            공용 저장
+          </button>
           <button className="btn" onClick={onDuplicate} type="button">
             <Copy size={14} />
           </button>
@@ -757,6 +823,15 @@ function SkillEditor({
           options={skillEffects}
           value={skill.effectType}
         />
+        {skill.effectType === 'damage' ? (
+          <SkillSelect
+            label="피해 타입"
+            labels={attackTypeLabels}
+            onChange={(attackTypeId) => onUpdate({ attackTypeId: attackTypeId || undefined })}
+            options={attackTypeOptions}
+            value={skill.attackTypeId ?? ''}
+          />
+        ) : null}
         <NumberStepper label="위력" min={-999} onChange={(value) => onUpdate({ value })} value={skill.value} />
       </div>
 

@@ -447,7 +447,8 @@ function canActivateSkill(caster: Combatant, skill: Skill, time: number): boolea
 function applySkillDamage(caster: Combatant, target: Combatant, skill: Skill, data: AppData): number {
   const rawDamage = skillValue(skill, caster, target);
   const baseDamage = Math.max(1, rawDamage - currentDefense(target));
-  const multiplier = matrixMultiplier(data, caster.unit.attackType, target.unit.defenseType);
+  const attackTypeId = skill.attackTypeId || caster.unit.attackType;
+  const multiplier = matrixMultiplier(data, attackTypeId, target.unit.defenseType);
   const finalDamage = Math.max(1, Math.round(baseDamage * multiplier));
   let remaining = finalDamage;
 
@@ -563,6 +564,7 @@ function activateSkill(
       targetNames: targets.map((target) => target.unit.name),
       targetTiles,
       effectType: skill.effectType,
+      attackTypeId: skill.attackTypeId || caster.unit.attackType,
       value: skill.value,
       valueType: skill.valueType,
       duration: skill.duration,

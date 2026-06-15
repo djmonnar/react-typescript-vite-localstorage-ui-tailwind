@@ -78,6 +78,7 @@ function normalizeSkill(skill: Unit['skillsV2'] extends Array<infer T> | undefin
     duration: Number(skill.duration) || 0,
     tags: Array.isArray(skill.tags) ? [...new Set(skill.tags.filter(Boolean))] : [],
     area: skill.area ?? { type: 'single' as const },
+    attackTypeId: typeof skill.attackTypeId === 'string' && skill.attackTypeId ? skill.attackTypeId : undefined,
     conditionLogic: skill.conditionLogic ?? 'AND',
     conditions: normalizeSkillConditions(skill),
   };
