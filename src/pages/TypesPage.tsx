@@ -2,6 +2,7 @@ import { Copy, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { NumberStepper } from '../components/NumberStepper';
 import { SectionHeader } from '../components/SectionHeader';
+import { SkillAdvancedTiming } from '../components/SkillAdvancedTiming';
 import { SkillConditionBuilder } from '../components/SkillConditionBuilder';
 import { TargetTagPicker } from '../components/TargetTagPicker';
 import { TextField } from '../components/TextField';
@@ -904,8 +905,7 @@ function SkillTemplateSettings({
             <NumberStepper label="쿨타임" onChange={(cooldown) => onUpdate({ cooldown })} step={0.5} value={selectedSkill.cooldown} />
             <NumberStepper label="MP 소모" onChange={(mpCost) => onUpdate({ mpCost })} value={selectedSkill.mpCost} />
             <NumberStepper label="발동 확률 %" max={100} onChange={(chance) => onUpdate({ chance })} value={selectedSkill.chance} />
-            <NumberStepper label="지속 시간" onChange={(duration) => onUpdate({ duration })} step={0.5} value={selectedSkill.duration} />
-            <NumberStepper label="최대 발동 횟수" onChange={(maxActivations) => onUpdate({ maxActivations: maxActivations > 0 ? maxActivations : undefined })} value={selectedSkill.maxActivations ?? 0} />
+            <SkillAdvancedTiming onUpdate={onUpdate} skill={selectedSkill} />
             <SelectField label="영역" labels={skillAreaLabels} onChange={(type) => onUpdate({ area: { ...area, type: type as SkillArea['type'] } })} options={skillAreas} value={area.type} />
             {area.type === 'circle' || area.type === 'cross' ? (
               <NumberStepper label="반경" min={0} onChange={(radius) => onUpdate({ area: { ...area, radius } })} value={area.radius ?? 0} />

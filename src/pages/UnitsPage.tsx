@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { JsonPreview } from '../components/JsonPreview';
 import { NumberStepper } from '../components/NumberStepper';
 import { SectionHeader } from '../components/SectionHeader';
+import { SkillAdvancedTiming } from '../components/SkillAdvancedTiming';
 import { SkillConditionBuilder } from '../components/SkillConditionBuilder';
 import { TargetTagPicker } from '../components/TargetTagPicker';
 import { TextField } from '../components/TextField';
@@ -942,12 +943,7 @@ function SkillEditor({
               options={['flat', 'percent']}
               value={skill.valueType}
             />
-            <NumberStepper label="지속 시간" onChange={(duration) => onUpdate({ duration })} step={0.5} value={skill.duration} />
-            <NumberStepper
-              label="최대 발동 횟수"
-              onChange={(maxActivations) => onUpdate({ maxActivations: maxActivations > 0 ? maxActivations : undefined })}
-              value={skill.maxActivations ?? 0}
-            />
+            <SkillAdvancedTiming onUpdate={onUpdate} skill={skill} />
             <SkillSelect
               label="영역"
               labels={skillAreaLabels}
