@@ -205,6 +205,33 @@ function AnalysisReport({ analysis }: { analysis: NonNullable<AppData['lastResul
         ))}
       </ReportBlock>
 
+      {analysis.skillStats ? (
+        <ReportBlock title="스킬 분석">
+          <div className="grid grid-cols-2 gap-2">
+            <Metric label="최다 발동" value={analysis.skillStats.topActivatedSkill?.skillName ?? '없음'} />
+            <Metric label="스킬 피해" value={analysis.skillStats.totalDamage} />
+            <Metric label="스킬 회복" value={analysis.skillStats.totalHealing} />
+            <Metric label="보호막 부여" value={analysis.skillStats.totalShield} />
+          </div>
+          {analysis.skillStats.skillStats.slice(0, 5).map((skill) => (
+            <div className="rounded-md border border-line bg-[#0f141d] px-3 py-2" key={skill.skillId}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-ink">{skill.skillName}</span>
+                <span className="font-mono text-xs text-acid">{skill.activations} casts</span>
+              </div>
+              <p className="mt-1 font-mono text-[10px] text-muted">
+                dmg {skill.damage} / heal {skill.healing} / shield {skill.shield} / buffs {skill.buffActivations}
+              </p>
+            </div>
+          ))}
+          {analysis.skillStats.summary.map((summary) => (
+            <p className="rounded-md border border-line bg-[#10151f] px-3 py-2 text-sm text-muted" key={summary}>
+              {summary}
+            </p>
+          ))}
+        </ReportBlock>
+      ) : null}
+
       <ReportBlock title="밸런스 조정 제안">
         <div className="space-y-2">
           {analysis.balanceSuggestions.map((suggestion) => (

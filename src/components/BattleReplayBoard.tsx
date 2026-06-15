@@ -5,6 +5,7 @@ import type {
   BattleReplayAttackEvent,
   BattleReplayEvent,
   BattleReplayMoveEvent,
+  BattleReplaySkillEvent,
   BattleReplayUnit,
 } from '../types';
 
@@ -127,6 +128,11 @@ export function BattleReplayBoard({ replay }: BattleReplayBoardProps) {
               {activeEvent.defeated ?? activeEvent.killed ? ' | 사망' : ''}
             </p>
           ) : null}
+          {isSkillEvent(activeEvent) ? (
+            <p className="mt-1 text-sm text-ink">
+              SKILL {activeEvent.effectType} | total {activeEvent.totalApplied}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -202,6 +208,16 @@ function buildReplayState(replay: BattleReplay, step: number): ReplayUnitState[]
       target.shield = Math.max(0, event.defenderShieldAfter ?? event.targetShieldAfter ?? target.shield);
       target.dead = Boolean(event.defeated ?? event.killed) || target.hp <= 0;
     }
+
+    if (isSkillEvent(event)) {
+      for (const targetId of event.targetIds) {
+        const target = state.get(targetId);
+        if (!target) continue;
+        target.hp = Math.max(0, event.targetHpAfter?.[targetId] ?? target.hp);
+        target.shield = Math.max(0, event.targetShieldAfter?.[targetId] ?? target.shield);
+        target.dead = target.hp <= 0;
+      }
+    }
   }
 
   return [...state.values()].sort((left, right) => left.team.localeCompare(right.team) || left.combatantId.localeCompare(right.combatantId));
@@ -219,6 +235,8 @@ function BattlefieldToken({
   const attacking = isAttackEvent(activeEvent) && activeEvent.attackerId === unit.combatantId;
   const targeted = isAttackEvent(activeEvent) && (activeEvent.defenderId ?? activeEvent.targetId) === unit.combatantId;
   const moving = isMoveEvent(activeEvent) && activeEvent.unitId === unit.combatantId;
+  const casting = isSkillEvent(activeEvent) && activeEvent.casterId === unit.combatantId;
+  const skillTargeted = isSkillEvent(activeEvent) && activeEvent.targetIds.includes(unit.combatantId);
   const hpPercent = unit.maxHp > 0 ? Math.round((unit.hp / unit.maxHp) * 100) : 0;
   const shieldPercent = unit.maxShield > 0 ? Math.round((unit.shield / unit.maxShield) * 100) : 0;
   const lane = unitIndex % 4;
@@ -231,7 +249,9 @@ function BattlefieldToken({
         unit.dead ? 'border-line bg-[#05070a] opacity-35 grayscale' : 'border-line bg-[#0f141d]'
       } ${attacking ? 'border-amber shadow-[0_0_0_2px_rgba(255,202,97,0.45)]' : ''} ${
         targeted ? 'border-danger shadow-[0_0_0_2px_rgba(255,107,129,0.5)]' : ''
-      } ${moving ? 'border-cyan shadow-[0_0_0_2px_rgba(80,227,194,0.35)]' : ''}`}
+      } ${moving ? 'border-cyan shadow-[0_0_0_2px_rgba(80,227,194,0.35)]' : ''} ${
+        casting || skillTargeted ? 'border-acid shadow-[0_0_0_2px_rgba(199,255,91,0.35)]' : ''
+      }`}
       style={{ left, top }}
       title={`${unit.name} @ ${unit.position.toFixed(1)}`}
     >
@@ -260,12 +280,20 @@ function isMoveEvent(event: BattleReplayEvent | undefined): event is BattleRepla
 }
 
 function isAttackEvent(event: BattleReplayEvent | undefined): event is BattleReplayAttackEvent {
-  return Boolean(event && event.type !== 'move' && 'attackerId' in event);
+  return Boolean(event && event.type !== 'move' && event.type !== 'skill' && 'attackerId' in event);
+}
+
+function isSkillEvent(event: BattleReplayEvent | undefined): event is BattleReplaySkillEvent {
+  return event?.type === 'skill';
 }
 
 function eventSummary(event: BattleReplayEvent): string {
   if (isMoveEvent(event)) {
     return `${event.team}:${event.unitName} MOVE ${event.fromPosition.toFixed(1)} -> ${event.toPosition.toFixed(1)}`;
+  }
+
+  if (isSkillEvent(event)) {
+    return `${event.casterTeam}:${event.casterName} SKILL ${event.skillName} -> ${event.targetNames.join(', ')}`;
   }
 
   const defenderName = event.defenderName ?? event.targetName ?? 'target';

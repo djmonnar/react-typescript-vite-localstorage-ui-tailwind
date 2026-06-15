@@ -29,6 +29,53 @@ export interface PassiveTraitEffect {
   value: number;
 }
 
+export type SkillTrigger = 'battleStart' | 'onAttack' | 'cooldown' | 'lowHp';
+
+export type SkillTarget =
+  | 'self'
+  | 'allyLowestHp'
+  | 'allAllies'
+  | 'enemyTarget'
+  | 'enemyLowestHp'
+  | 'allEnemies'
+  | 'enemiesInRange';
+
+export type SkillEffectType =
+  | 'damage'
+  | 'heal'
+  | 'shield'
+  | 'attackBuff'
+  | 'defenseBuff'
+  | 'moveSpeedBuff'
+  | 'attackSpeedBuff';
+
+export interface Skill {
+  id: Id;
+  name: string;
+  description: string;
+  trigger: SkillTrigger;
+  target: SkillTarget;
+  effectType: SkillEffectType;
+  value: number;
+  valueType: 'flat' | 'percent';
+  cooldown: number;
+  mpCost: number;
+  chance: number;
+  duration: number;
+  maxActivations?: number;
+  tags?: string[];
+  notes: string;
+}
+
+export interface ActiveBuff {
+  id: Id;
+  sourceSkillId: Id;
+  effectType: 'attackBuff' | 'defenseBuff' | 'moveSpeedBuff' | 'attackSpeedBuff';
+  value: number;
+  valueType: 'flat' | 'percent';
+  expiresAt: number;
+}
+
 export interface Race {
   id: Id;
   name: string;
@@ -60,6 +107,7 @@ export interface Unit {
   attackSpeed: number;
   tags: string[];
   skills: string;
+  skillsV2?: Skill[];
   cost: number;
   buildTime: number;
   notes: string;
@@ -172,6 +220,7 @@ export interface BattleAnalysis {
   typeAdvantages: TypeAdvantageReport[];
   costEfficiency: CostEfficiency[];
   balanceSuggestions: string[];
+  skillStats?: BattleSkillAnalysis;
 }
 
 export interface BattleReplayUnit {
@@ -192,7 +241,7 @@ export interface BattleReplayBaseEvent {
   id: Id;
   index: number;
   time: number;
-  type?: 'attack' | 'move';
+  type?: 'attack' | 'move' | 'skill';
 }
 
 export interface BattleReplayAttackEvent extends BattleReplayBaseEvent {
@@ -230,7 +279,43 @@ export interface BattleReplayMoveEvent extends BattleReplayBaseEvent {
   toPosition: number;
 }
 
-export type BattleReplayEvent = BattleReplayAttackEvent | BattleReplayMoveEvent;
+export interface BattleReplaySkillEvent extends BattleReplayBaseEvent {
+  type: 'skill';
+  casterId: Id;
+  casterName: string;
+  casterTeam: 'A' | 'B';
+  skillId: Id;
+  skillName: string;
+  targetIds: Id[];
+  targetNames: string[];
+  effectType: SkillEffectType;
+  value: number;
+  totalApplied: number;
+  targetHpAfter?: Record<Id, number>;
+  targetShieldAfter?: Record<Id, number>;
+}
+
+export type BattleReplayEvent = BattleReplayAttackEvent | BattleReplayMoveEvent | BattleReplaySkillEvent;
+
+export interface SkillStat {
+  skillId: Id;
+  skillName: string;
+  activations: number;
+  damage: number;
+  healing: number;
+  shield: number;
+  buffActivations: number;
+}
+
+export interface BattleSkillAnalysis {
+  topActivatedSkill?: SkillStat;
+  totalDamage: number;
+  totalHealing: number;
+  totalShield: number;
+  totalBuffActivations: number;
+  skillStats: SkillStat[];
+  summary: string[];
+}
 
 export interface BattleReplay {
   factionAName: string;

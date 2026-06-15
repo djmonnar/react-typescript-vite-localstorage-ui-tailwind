@@ -6,13 +6,17 @@ import { NumberStepper } from '../components/NumberStepper';
 import { SectionHeader } from '../components/SectionHeader';
 import { TextField } from '../components/TextField';
 import { defaultUnitTags } from '../data/defaultTags';
-import type { AppData, Race, Unit } from '../types';
+import type { AppData, Race, Skill, SkillEffectType, SkillTarget, SkillTrigger, Unit } from '../types';
 import { createId, nowIso } from '../utils/ids';
 
 interface UnitsPageProps {
   data: AppData;
   setData: (updater: (current: AppData) => AppData) => void;
 }
+
+const skillTriggers: SkillTrigger[] = ['battleStart', 'onAttack', 'cooldown', 'lowHp'];
+const skillTargets: SkillTarget[] = ['self', 'allyLowestHp', 'allAllies', 'enemyTarget', 'enemyLowestHp', 'allEnemies', 'enemiesInRange'];
+const skillEffects: SkillEffectType[] = ['damage', 'heal', 'shield', 'attackBuff', 'defenseBuff', 'moveSpeedBuff', 'attackSpeedBuff'];
 
 export function UnitsPage({ data, setData }: UnitsPageProps) {
   const [selectedFactionId, setSelectedFactionId] = useState(data.races[0]?.id ?? '');
@@ -87,6 +91,7 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
       attackSpeed: 1,
       tags: [],
       skills: '',
+      skillsV2: [],
       cost: 50,
       buildTime: 10,
       notes: '',
@@ -155,6 +160,55 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
     if (!nextTag) return;
     setUnitTags([...selectedUnit.tags, nextTag]);
     setTagInput('');
+  };
+
+  const setSkillsV2 = (skillsV2: Skill[]) => {
+    updateUnit({ skillsV2 });
+  };
+
+  const addSkill = () => {
+    if (!selectedUnit) return;
+    setSkillsV2([
+      ...(selectedUnit.skillsV2 ?? []),
+      {
+        id: createId('skill'),
+        name: '새 스킬',
+        description: '',
+        trigger: 'cooldown',
+        target: 'enemyTarget',
+        effectType: 'damage',
+        value: 10,
+        valueType: 'flat',
+        cooldown: 5,
+        mpCost: 0,
+        chance: 100,
+        duration: 0,
+        tags: [],
+        notes: '',
+      },
+    ]);
+  };
+
+  const updateSkill = (skillId: string, patch: Partial<Skill>) => {
+    if (!selectedUnit) return;
+    setSkillsV2((selectedUnit.skillsV2 ?? []).map((skill) => (skill.id === skillId ? { ...skill, ...patch } : skill)));
+  };
+
+  const duplicateSkill = (skill: Skill) => {
+    if (!selectedUnit) return;
+    setSkillsV2([
+      ...(selectedUnit.skillsV2 ?? []),
+      {
+        ...skill,
+        id: createId('skill'),
+        name: `${skill.name} 복제`,
+      },
+    ]);
+  };
+
+  const deleteSkill = (skillId: string) => {
+    if (!selectedUnit) return;
+    setSkillsV2((selectedUnit.skillsV2 ?? []).filter((skill) => skill.id !== skillId));
   };
 
   const typeName = (kind: 'attack' | 'defense', id: string) => {
@@ -430,6 +484,27 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
           <FormSection title="메모 / JSON">
             <TextField label="메모" multiline onChange={(notes) => updateUnit({ notes })} value={selectedUnit.notes} />
             <div className="mt-3">
+              <div className="mb-4 space-y-3 rounded-md border border-line bg-[#0f141d] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h5 className="text-sm font-bold text-cyan">프리셋 스킬</h5>
+                  <button className="btn btn-primary" onClick={addSkill} type="button">
+                    <Plus size={16} />
+                    추가
+                  </button>
+                </div>
+                {(selectedUnit.skillsV2 ?? []).map((skill) => (
+                  <SkillEditor
+                    key={skill.id}
+                    onDelete={() => deleteSkill(skill.id)}
+                    onDuplicate={() => duplicateSkill(skill)}
+                    onUpdate={(patch) => updateSkill(skill.id, patch)}
+                    skill={skill}
+                  />
+                ))}
+                {(selectedUnit.skillsV2 ?? []).length === 0 ? (
+                  <p className="text-sm text-muted">아직 구조화 스킬이 없습니다.</p>
+                ) : null}
+              </div>
               <JsonPreview value={selectedUnit} />
             </div>
           </FormSection>
@@ -454,5 +529,117 @@ function FormSection({ title, children }: { title: string; children: ReactNode }
       <h4 className="mb-3 text-sm font-bold text-cyan">{title}</h4>
       {children}
     </div>
+  );
+}
+
+function SkillEditor({
+  onDelete,
+  onDuplicate,
+  onUpdate,
+  skill,
+}: {
+  onDelete: () => void;
+  onDuplicate: () => void;
+  onUpdate: (patch: Partial<Skill>) => void;
+  skill: Skill;
+}) {
+  return (
+    <div className="rounded-md border border-line bg-[#10151f] p-3">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-bold text-ink">{skill.name}</p>
+          <p className="mt-1 font-mono text-[10px] text-muted">
+            {skill.trigger} / {skill.target} / {skill.effectType}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button className="btn" onClick={onDuplicate} type="button">
+            <Copy size={14} />
+          </button>
+          <button className="btn btn-danger" onClick={onDelete} type="button">
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <TextField label="스킬명" onChange={(name) => onUpdate({ name })} value={skill.name} />
+        <TextField label="설명" onChange={(description) => onUpdate({ description })} value={skill.description} />
+        <SkillSelect
+          label="발동 조건"
+          onChange={(trigger) => onUpdate({ trigger: trigger as SkillTrigger })}
+          options={skillTriggers}
+          value={skill.trigger}
+        />
+        <SkillSelect
+          label="대상"
+          onChange={(target) => onUpdate({ target: target as SkillTarget })}
+          options={skillTargets}
+          value={skill.target}
+        />
+        <SkillSelect
+          label="효과"
+          onChange={(effectType) => onUpdate({ effectType: effectType as SkillEffectType })}
+          options={skillEffects}
+          value={skill.effectType}
+        />
+        <SkillSelect
+          label="수치 타입"
+          onChange={(valueType) => onUpdate({ valueType: valueType as Skill['valueType'] })}
+          options={['flat', 'percent']}
+          value={skill.valueType}
+        />
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <NumberStepper label="수치" min={-999} onChange={(value) => onUpdate({ value })} value={skill.value} />
+        <NumberStepper label="쿨타임" onChange={(cooldown) => onUpdate({ cooldown })} step={0.5} value={skill.cooldown} />
+        <NumberStepper label="MP 소모" onChange={(mpCost) => onUpdate({ mpCost })} value={skill.mpCost} />
+        <NumberStepper label="확률 %" max={100} onChange={(chance) => onUpdate({ chance })} value={skill.chance} />
+        <NumberStepper label="지속시간" onChange={(duration) => onUpdate({ duration })} step={0.5} value={skill.duration} />
+        <NumberStepper
+          label="최대 발동"
+          onChange={(maxActivations) => onUpdate({ maxActivations: maxActivations > 0 ? maxActivations : undefined })}
+          value={skill.maxActivations ?? 0}
+        />
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <TextField
+          label="스킬 태그"
+          onChange={(value) =>
+            onUpdate({ tags: value.split(',').map((tag) => tag.trim()).filter(Boolean) })
+          }
+          placeholder="치유, 보호막"
+          value={(skill.tags ?? []).join(', ')}
+        />
+        <TextField label="스킬 메모" onChange={(notes) => onUpdate({ notes })} value={skill.notes} />
+      </div>
+    </div>
+  );
+}
+
+function SkillSelect({
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: string[];
+  value: string;
+}) {
+  return (
+    <label className="block">
+      <span className="label">{label}</span>
+      <select className="field" onChange={(event) => onChange(event.target.value)} value={value}>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
