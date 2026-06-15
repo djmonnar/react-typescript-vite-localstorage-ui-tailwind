@@ -189,6 +189,13 @@ function tagBehaviorValue(combatant: Combatant, type: UnitTagBehavior['type']): 
     .reduce((max, behavior) => Math.max(max, Number(behavior.value) || 0), 0);
 }
 
+function tagDamageMultiplier(attacker: Combatant, defender: Combatant): number {
+  return attacker.tagBehaviors
+    .filter((behavior) => behavior.type === 'tagDamageMultiplier')
+    .filter((behavior) => behavior.targetTags?.some((tag) => defender.unit.tags.includes(tag)))
+    .reduce((multiplier, behavior) => Math.max(multiplier, (Number(behavior.value) || 100) / 100), 1);
+}
+
 function tagBehaviorsForUnit(data: AppData, unit: EffectiveUnit): UnitTagBehavior[] {
   const byName = new Map(data.unitTags.map((tag) => [tag.name, tag.behaviors ?? []]));
   return unit.tags.flatMap((tagName) => byName.get(tagName) ?? []);
@@ -390,6 +397,14 @@ function selectTargetInRange(attacker: Combatant, enemies: Combatant[]): Combata
       const backDelta = Number(isBackAttackFrom(attacker.tile, right)) - Number(isBackAttackFrom(attacker.tile, left));
       if (backDelta !== 0) return backDelta;
     }
+    if (hasTagBehavior(attacker, 'assassinateBackline')) {
+      const backlineDelta = attacker.team === 'A' ? right.tile.x - left.tile.x : left.tile.x - right.tile.x;
+      if (backlineDelta !== 0) return backlineDelta;
+    }
+    if (hasTagBehavior(attacker, 'killCatch')) {
+      const hpDelta = left.hp - right.hp;
+      if (hpDelta !== 0) return hpDelta;
+    }
     const distanceDelta = tileDistance(attacker.tile, left.tile) - tileDistance(attacker.tile, right.tile);
     if (attacker.unit.range <= 1 || distanceDelta !== 0) return distanceDelta;
     return left.hp + left.shield - (right.hp + right.shield);
@@ -413,10 +428,18 @@ function neighbors(tile: GridTile): GridTile[] {
   ].filter(inBounds);
 }
 
-function reachableTiles(start: GridTile, maxSteps: number, occupied: Set<string>): Array<{ tile: GridTile; steps: number }> {
-  const queue: Array<{ tile: GridTile; steps: number }> = [{ tile: start, steps: 0 }];
-  const visited = new Set([tileKey(start)]);
-  const result: Array<{ tile: GridTile; steps: number }> = [{ tile: start, steps: 0 }];
+function reachableTilesFor(combatant: Combatant, combatants: Combatant[]): Array<{ tile: GridTile; steps: number }> {
+  const maxSteps = movePower(combatant);
+  const occupants = new Map(
+    alive(combatants)
+      .filter((candidate) => candidate.id !== combatant.id)
+      .map((candidate) => [tileKey(candidate.tile), candidate]),
+  );
+  const canFly = hasTagBehavior(combatant, 'flyingMove');
+  const canJumpAllies = hasTagBehavior(combatant, 'jumpPackMove');
+  const queue: Array<{ tile: GridTile; steps: number }> = [{ tile: combatant.tile, steps: 0 }];
+  const visited = new Set([tileKey(combatant.tile)]);
+  const result: Array<{ tile: GridTile; steps: number }> = [{ tile: combatant.tile, steps: 0 }];
 
   while (queue.length > 0) {
     const current = queue.shift();
@@ -424,11 +447,15 @@ function reachableTiles(start: GridTile, maxSteps: number, occupied: Set<string>
 
     for (const next of neighbors(current.tile)) {
       const key = tileKey(next);
-      if (visited.has(key) || occupied.has(key)) continue;
+      if (visited.has(key)) continue;
+      const occupant = occupants.get(key);
+      const canPassOccupied = canFly || (canJumpAllies && occupant?.team === combatant.team);
+      if (occupant && !canPassOccupied) continue;
+
       visited.add(key);
       const entry = { tile: next, steps: current.steps + 1 };
       queue.push(entry);
-      result.push(entry);
+      if (!occupant) result.push(entry);
     }
   }
 
@@ -439,8 +466,7 @@ function chooseMoveTile(attacker: Combatant, target: Combatant, combatants: Comb
   const fromTile = attacker.tile;
   if (canAttackFrom(attacker, attacker.tile, target)) return { fromTile, toTile: fromTile, steps: 0 };
 
-  const occupied = occupiedTiles(combatants, attacker.id);
-  const reachable = reachableTiles(attacker.tile, movePower(attacker), occupied);
+  const reachable = reachableTilesFor(attacker, combatants);
   const currentDistance = tileDistance(attacker.tile, target.tile);
   const best = [...reachable]
     .filter((entry) => entry.steps > 0)
@@ -463,8 +489,7 @@ function chooseMoveTile(attacker: Combatant, target: Combatant, combatants: Comb
 
 function chooseBackAttackTile(attacker: Combatant, target: Combatant, combatants: Combatant[]): { fromTile: GridTile; toTile: GridTile; steps: number } {
   const fromTile = attacker.tile;
-  const occupied = occupiedTiles(combatants, attacker.id);
-  const candidates = reachableTiles(attacker.tile, movePower(attacker), occupied)
+  const candidates = reachableTilesFor(attacker, combatants)
     .filter((entry) => entry.steps > 0)
     .filter((entry) => canAttackFrom(attacker, entry.tile, target))
     .filter((entry) => isBackAttackFrom(entry.tile, target))
@@ -493,8 +518,7 @@ function chooseBackAttackApproachTile(attacker: Combatant, target: Combatant, co
   const desiredTiles = backAttackTiles(attacker, target, combatants);
   if (desiredTiles.length === 0) return chooseMoveTile(attacker, target, combatants);
 
-  const occupied = occupiedTiles(combatants, attacker.id);
-  const reachable = reachableTiles(attacker.tile, movePower(attacker), occupied);
+  const reachable = reachableTilesFor(attacker, combatants);
   const currentBestDistance = Math.min(...desiredTiles.map((tile) => tileDistance(attacker.tile, tile)));
   const best = [...reachable]
     .filter((entry) => entry.steps > 0)
@@ -521,11 +545,10 @@ function chooseBackAttackApproachTile(attacker: Combatant, target: Combatant, co
 
 function chooseKiteTile(attacker: Combatant, target: Combatant, combatants: Combatant[]): { fromTile: GridTile; toTile: GridTile; steps: number } {
   const fromTile = attacker.tile;
-  const occupied = occupiedTiles(combatants, attacker.id);
   const enemies = alive(combatants, attacker.team === 'A' ? 'B' : 'A');
   const currentClosestDistance = Math.min(...enemies.map((enemy) => tileDistance(attacker.tile, enemy.tile)));
   const currentTargetDistance = tileDistance(attacker.tile, target.tile);
-  const candidates = reachableTiles(attacker.tile, movePower(attacker), occupied)
+  const candidates = reachableTilesFor(attacker, combatants)
     .filter((entry) => entry.steps > 0)
     .filter((entry) => canAttackFrom(attacker, entry.tile, target))
     .map((entry) => ({
@@ -564,7 +587,7 @@ function applyDamage(attacker: Combatant, defender: Combatant, data: AppData): D
   const typeMultiplier = matrixMultiplier(data, attacker.unit.attackType, defender.unit.defenseType);
   const backAttack = isBackAttackFrom(attacker.tile, defender);
   const backAttackBonus = backAttack ? tagBehaviorValue(attacker, 'backAttackDamagePercent') : 0;
-  const multiplier = round2(typeMultiplier * (1 + backAttackBonus / 100));
+  const multiplier = round2(typeMultiplier * (1 + backAttackBonus / 100) * tagDamageMultiplier(attacker, defender));
   const finalDamage = Math.max(1, Math.round(baseDamage * multiplier));
   const bonusDamage = Math.max(0, Math.round(baseDamage * typeMultiplier) - baseDamage);
   let remaining = finalDamage;
@@ -729,7 +752,7 @@ function applySkillDamage(caster: Combatant, target: Combatant, skill: Skill, da
   const baseDamage = Math.max(1, rawDamage - currentDefense(target));
   const attackTypeId = skill.attackTypeId || caster.unit.attackType;
   const multiplier = matrixMultiplier(data, attackTypeId, target.unit.defenseType);
-  const finalDamage = Math.max(1, Math.round(baseDamage * multiplier));
+  const finalDamage = Math.max(1, Math.round(baseDamage * multiplier * tagDamageMultiplier(caster, target)));
   let remaining = finalDamage;
 
   if (target.shield > 0) {

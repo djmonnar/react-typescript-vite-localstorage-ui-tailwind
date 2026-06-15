@@ -23,6 +23,9 @@ export const defaultUnitTags = [
   '후방공격',
   '무빙샷',
   '야포',
+  '점프팩',
+  '암살',
+  '킬캐치',
 ];
 
 const categoryByTag: Record<string, UnitTagCategory> = {
@@ -41,6 +44,9 @@ const categoryByTag: Record<string, UnitTagCategory> = {
   후방공격: '전투방식',
   무빙샷: '전투방식',
   야포: '전투방식',
+  점프팩: '전투방식',
+  암살: '전투방식',
+  킬캐치: '전투방식',
   비행: '전투방식',
   마법: '속성',
   독: '속성',

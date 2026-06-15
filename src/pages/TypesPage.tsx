@@ -245,7 +245,15 @@ export function TypesPage({ data, setData }: TypesPageProps) {
     const tagName = selectedTag.name;
     setData((current) => ({
       ...current,
-      unitTags: current.unitTags.filter((tag) => tag.id !== selectedTag.id),
+      unitTags: current.unitTags
+        .filter((tag) => tag.id !== selectedTag.id)
+        .map((tag) => ({
+          ...tag,
+          behaviors: (tag.behaviors ?? []).map((behavior) => ({
+            ...behavior,
+            targetTags: (behavior.targetTags ?? []).filter((targetTag) => targetTag !== tagName),
+          })),
+        })),
       units: current.units.map((unit) => ({
         ...unit,
         tags: unit.tags.filter((tag) => tag !== tagName),
@@ -501,6 +509,7 @@ export function TypesPage({ data, setData }: TypesPageProps) {
               <TagBehaviorEditor
                 behaviors={selectedTag.behaviors ?? []}
                 onChange={(behaviors) => updateTag({ behaviors })}
+                tags={data.unitTags.map((tag) => tag.name)}
               />
               <label className="block">
                 <span className="label">카테고리</span>
@@ -571,9 +580,11 @@ export function TypesPage({ data, setData }: TypesPageProps) {
 function TagBehaviorEditor({
   behaviors,
   onChange,
+  tags,
 }: {
   behaviors: UnitTagBehavior[];
   onChange: (behaviors: UnitTagBehavior[]) => void;
+  tags: string[];
 }) {
   const hasBehavior = (type: TagBehaviorType) => behaviors.some((behavior) => behavior.type === type);
   const getBehavior = (type: TagBehaviorType) => behaviors.find((behavior) => behavior.type === type);
@@ -596,6 +607,10 @@ function TagBehaviorEditor({
 
   const updateBehaviorValue = (type: TagBehaviorType, value: number) => {
     onChange(behaviors.map((behavior) => (behavior.type === type ? { ...behavior, value } : behavior)));
+  };
+
+  const updateBehaviorTargetTags = (type: TagBehaviorType, targetTags: string[]) => {
+    onChange(behaviors.map((behavior) => (behavior.type === type ? { ...behavior, targetTags } : behavior)));
   };
 
   return (
@@ -643,6 +658,16 @@ function TagBehaviorEditor({
                     onChange={(value) => updateBehaviorValue(definition.type, value)}
                     step={definition.step ?? 1}
                     value={behavior?.value ?? definition.defaultValue ?? 0}
+                  />
+                </div>
+              ) : null}
+              {checked && definition.targetTagsLabel ? (
+                <div className="mt-3 space-y-2">
+                  <p className="label">{definition.targetTagsLabel}</p>
+                  <TargetTagPicker
+                    availableTags={tags}
+                    selectedTags={behavior?.targetTags ?? []}
+                    onChange={(targetTags) => updateBehaviorTargetTags(definition.type, targetTags)}
                   />
                 </div>
               ) : null}
@@ -1018,6 +1043,13 @@ function round2(value: number) {
 function renameTagEverywhere(current: AppData, previousName: string, nextName: string): Partial<AppData> {
   const renameList = (tags: string[] | undefined) => (tags ?? []).map((tag) => (tag === previousName ? nextName : tag));
   return {
+    unitTags: current.unitTags.map((tag) => ({
+      ...tag,
+      behaviors: (tag.behaviors ?? []).map((behavior) => ({
+        ...behavior,
+        targetTags: renameList(behavior.targetTags),
+      })),
+    })),
     units: current.units.map((unit) => ({
       ...unit,
       tags: renameList(unit.tags),

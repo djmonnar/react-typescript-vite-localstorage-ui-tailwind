@@ -66,11 +66,17 @@ export type TagBehaviorType =
   | 'seekBackAttack'
   | 'backAttackDamagePercent'
   | 'kite'
-  | 'cannotAttackAdjacent';
+  | 'cannotAttackAdjacent'
+  | 'tagDamageMultiplier'
+  | 'flyingMove'
+  | 'jumpPackMove'
+  | 'assassinateBackline'
+  | 'killCatch';
 
 export interface UnitTagBehavior {
   type: TagBehaviorType;
   value?: number;
+  targetTags?: string[];
 }
 
 export interface UnitTag {
