@@ -328,50 +328,37 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
       </section>
 
       <section className="space-y-3">
-        <h3 className="font-semibold text-ink">팩션 유닛</h3>
-        {factionUnits.map((unit) => (
-          <button
-            className={`w-full rounded-lg border p-3 text-left transition active:scale-[0.99] ${
-              unit.id === selectedUnit?.id ? 'border-cyan bg-cyan/10' : 'border-line bg-panel'
-            }`}
-            key={unit.id}
-            onClick={() => setSelectedUnitId(unit.id)}
-            type="button"
-          >
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-md border border-cyan/30 bg-cyan/10 px-2 py-1 text-xs font-bold text-cyan">
-                    <UnitIcon className="h-3.5 w-3.5" type={unit.iconType} />
-                    {unitIconLabels[unit.iconType]}
-                  </span>
-                  <p className="text-base font-bold text-ink">{unit.name}</p>
-                  {unit.isHero ? <span className="rounded bg-amber/15 px-2 py-1 text-xs font-bold text-amber">영웅</span> : null}
-                </div>
-                <p className="mt-1 text-sm text-muted">{unit.role}</p>
-                {unit.tags.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {unit.tags.map((tag) => (
-                      <span className="chip text-[10px]" key={tag}>
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-semibold text-ink">팩션 유닛</h3>
+          <span className="text-xs text-muted">좌우로 밀어서 선택</span>
+        </div>
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
+          {factionUnits.map((unit) => (
+            <button
+              className={`min-h-28 w-40 shrink-0 rounded-lg border p-3 text-left transition active:scale-[0.98] ${
+                unit.id === selectedUnit?.id ? 'border-cyan bg-cyan/10 shadow-[0_0_0_1px_rgba(95,231,255,0.18)]' : 'border-line bg-panel'
+              }`}
+              key={unit.id}
+              onClick={() => setSelectedUnitId(unit.id)}
+              type="button"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-cyan/30 bg-cyan/10 text-cyan">
+                  <UnitIcon className="h-5 w-5" type={unit.iconType} />
+                </span>
+                {unit.isHero ? <span className="rounded bg-amber/15 px-1.5 py-1 text-[10px] font-bold text-amber">영웅</span> : null}
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-              <CardStat label="전투 코스트" value={unit.unitCost} />
-              <CardStat label="HP / 보호막" value={`${unit.hp} / ${unit.shield}`} />
-              <CardStat label="공격 / 방어" value={`${unit.attack} / ${unit.defense}`} />
-              <CardStat label="공격 타입" value={typeName('attack', unit.attackType)} />
-              <CardStat label="방어 타입" value={typeName('defense', unit.defenseType)} />
-              <CardStat label="사거리" value={unit.range} />
-              <CardStat label="이동속도" value={unit.moveSpeed} />
-              <CardStat label="공격속도" value={unit.attackSpeed} />
-            </div>
-          </button>
-        ))}
+              <p className="mt-2 truncate text-sm font-bold text-ink">{unit.name}</p>
+              <p className="truncate text-xs text-muted">{unit.role}</p>
+              <div className="mt-2 grid grid-cols-2 gap-1 text-[10px]">
+                <CompactStat label="비용" value={unit.unitCost} />
+                <CompactStat label="HP" value={unit.hp} />
+                <CompactStat label="공격" value={unit.attack} />
+                <CompactStat label="사거리" value={unit.range} />
+              </div>
+            </button>
+          ))}
+        </div>
         {factionUnits.length === 0 ? (
           <p className="panel text-sm text-muted">선택한 팩션에 유닛이 없습니다. 새 유닛을 추가하세요.</p>
         ) : null}
@@ -383,6 +370,9 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
             <div>
               <p className="label">선택한 유닛</p>
               <h3 className="text-lg font-bold text-ink">{selectedUnit.name}</h3>
+              <p className="mt-1 text-sm text-muted">
+                {selectedUnit.role} · {typeName('attack', selectedUnit.attackType)} / {typeName('defense', selectedUnit.defenseType)}
+              </p>
             </div>
             <div className="flex gap-2">
               <button className="btn" onClick={duplicateUnit} type="button">
@@ -393,8 +383,14 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
               </button>
             </div>
           </div>
+          <div className="grid grid-cols-4 gap-2">
+            <CompactStat label="HP" value={selectedUnit.hp} />
+            <CompactStat label="공격" value={selectedUnit.attack} />
+            <CompactStat label="방어" value={selectedUnit.defense} />
+            <CompactStat label="비용" value={selectedUnit.unitCost} />
+          </div>
 
-          <FormSection title="기본 정보">
+          <FormSection defaultOpen title="기본 정보">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <TextField label="이름" onChange={(name) => updateUnit({ name })} value={selectedUnit.name} />
               <TextField label="역할" onChange={(role) => updateUnit({ role })} value={selectedUnit.role} />
@@ -515,7 +511,7 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
             </div>
           </FormSection>
 
-          <FormSection title="스킬">
+          <FormSection title={`스킬 ${(selectedUnit.skillsV2 ?? []).length}개`}>
             <div>
               <TextField label="특수기술 메모" multiline onChange={(skills) => updateUnit({ skills })} value={selectedUnit.skills} />
             </div>
@@ -733,21 +729,24 @@ function SkillSection({
   );
 }
 
-function CardStat({ label, value }: { label: string; value: string | number }) {
+function CompactStat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-md border border-line bg-[#0f141d] px-2 py-2">
-      <p className="text-[10px] font-semibold uppercase text-muted">{label}</p>
-      <p className="mt-1 font-mono text-xs text-ink">{value}</p>
+    <div className="rounded-md border border-line bg-[#0f141d] px-2 py-1.5">
+      <p className="text-[10px] font-semibold text-muted">{label}</p>
+      <p className="mt-0.5 truncate font-mono text-xs font-bold text-ink">{value}</p>
     </div>
   );
 }
 
-function FormSection({ title, children }: { title: string; children: ReactNode }) {
+function FormSection({ title, children, defaultOpen = false }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
   return (
-    <div className="rounded-md border border-line bg-[#10151f] p-3">
-      <h4 className="mb-3 text-sm font-bold text-cyan">{title}</h4>
-      {children}
-    </div>
+    <details className="rounded-md border border-line bg-[#10151f] p-3 open:pb-4" open={defaultOpen}>
+      <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-cyan marker:hidden">
+        <span>{title}</span>
+        <span className="rounded-md border border-line bg-[#0f141d] px-2 py-1 text-[10px] text-muted">열기/닫기</span>
+      </summary>
+      <div className="mt-3">{children}</div>
+    </details>
   );
 }
 
