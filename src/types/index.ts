@@ -108,12 +108,28 @@ export interface Unit {
   tags: string[];
   skills: string;
   skillsV2?: Skill[];
+  unitCost: number;
+  iconType: UnitIconType;
   cost: number;
   buildTime: number;
   notes: string;
   createdAt: string;
   updatedAt: string;
 }
+
+export type UnitIconType =
+  | 'sword'
+  | 'bow'
+  | 'gun'
+  | 'shield'
+  | 'magic'
+  | 'heal'
+  | 'beast'
+  | 'machine'
+  | 'hero'
+  | 'skull'
+  | 'tank'
+  | 'artillery';
 
 export interface AttackType {
   id: Id;
@@ -157,6 +173,13 @@ export interface ArmyEntry {
   count: number;
 }
 
+export interface DeployedUnit {
+  id: Id;
+  unitId: Id;
+  team: 'A' | 'B';
+  tile: GridTile;
+}
+
 export interface BattlePreset {
   id: Id;
   name: string;
@@ -164,6 +187,10 @@ export interface BattlePreset {
   raceBId: Id;
   armyA: ArmyEntry[];
   armyB: ArmyEntry[];
+  maxCostA?: number;
+  maxCostB?: number;
+  deploymentA?: DeployedUnit[];
+  deploymentB?: DeployedUnit[];
   notes: string;
 }
 
@@ -244,11 +271,9 @@ export interface BattleReplayUnit {
   defenseType: Id;
   attackTypeName?: string;
   defenseTypeName?: string;
-  stackCount?: number;
-  hpPerUnit?: number;
-  maxStackHp?: number;
+  iconType?: UnitIconType;
   initialTile?: GridTile;
-  initialPosition: number;
+  initialPosition?: number;
 }
 
 export interface BattleReplayBaseEvent {

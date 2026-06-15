@@ -8,10 +8,10 @@ const STORAGE_KEY = 'creative-race-battle-lab:v1';
 function loadData(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return sampleData;
+    if (!raw) return normalizeData(sampleData);
     return normalizeData(JSON.parse(raw) as AppData);
   } catch {
-    return sampleData;
+    return normalizeData(sampleData);
   }
 }
 
@@ -27,7 +27,7 @@ export function usePersistentData() {
   }, []);
 
   const resetData = useCallback(() => {
-    setData(sampleData);
+    setData(normalizeData(sampleData));
   }, []);
 
   return useMemo(

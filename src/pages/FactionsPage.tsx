@@ -469,6 +469,8 @@ function buildWizardUnits(
       tags,
       skills: `${style.name} 마법사 생성 유닛`,
       skillsV2,
+      unitCost: stats.unitCost,
+      iconType: stats.iconType,
       cost: stats.cost,
       buildTime: stats.buildTime,
       notes: `${style.name} / ${composition.name} 구성으로 생성됨`,
@@ -500,12 +502,12 @@ function roleStats(role: FactionWizardComposition['roles'][number], style: Facti
   const arcaneHpPenalty = style.id === 'arcane' ? -12 : 0;
   const undeadHp = style.id === 'undead' ? 18 : 0;
   const table = {
-    melee: { hp: 115 + undeadHp, mp: 0, shield: 8 + machineShield, attack: 22, defense: 4, range: 1, moveSpeed: 3 + beastSpeed, attackSpeed: 1.05, cost: 80, buildTime: 18 },
-    ranged: { hp: 82 + arcaneHpPenalty, mp: 25, shield: 6 + machineShield, attack: 27, defense: 2, range: 4, moveSpeed: 2.6 + beastSpeed, attackSpeed: 0.9, cost: 115, buildTime: 24 },
-    tank: { hp: 190 + undeadHp, mp: 10, shield: 28 + machineShield, attack: 16, defense: 8, range: 1, moveSpeed: 2.1 + beastSpeed, attackSpeed: 0.7, cost: 130, buildTime: 30 },
-    support: { hp: 90 + arcaneHpPenalty, mp: 70, shield: 12 + machineShield, attack: 14, defense: 3, range: 3, moveSpeed: 2.5 + beastSpeed, attackSpeed: 0.75, cost: 140, buildTime: 32 },
-    elite: { hp: 130 + undeadHp, mp: 35, shield: 14 + machineShield, attack: 36, defense: 5, range: 3, moveSpeed: 2.7 + beastSpeed, attackSpeed: 0.85, cost: 210, buildTime: 42 },
-    hero: { hp: 340 + undeadHp, mp: 90, shield: 45 + machineShield, attack: 48, defense: 10, range: style.id === 'arcane' ? 5 : 2, moveSpeed: 2.5 + beastSpeed, attackSpeed: 0.85, cost: 520, buildTime: 70 },
+    melee: { hp: 115 + undeadHp, mp: 0, shield: 8 + machineShield, attack: 22, defense: 4, range: 1, moveSpeed: 3 + beastSpeed, attackSpeed: 1.05, unitCost: 2, iconType: 'sword', cost: 80, buildTime: 18 },
+    ranged: { hp: 82 + arcaneHpPenalty, mp: 25, shield: 6 + machineShield, attack: 27, defense: 2, range: 4, moveSpeed: 2.6 + beastSpeed, attackSpeed: 0.9, unitCost: 3, iconType: 'bow', cost: 115, buildTime: 24 },
+    tank: { hp: 190 + undeadHp, mp: 10, shield: 28 + machineShield, attack: 16, defense: 8, range: 1, moveSpeed: 2.1 + beastSpeed, attackSpeed: 0.7, unitCost: 4, iconType: 'shield', cost: 130, buildTime: 30 },
+    support: { hp: 90 + arcaneHpPenalty, mp: 70, shield: 12 + machineShield, attack: 14, defense: 3, range: 3, moveSpeed: 2.5 + beastSpeed, attackSpeed: 0.75, unitCost: 3, iconType: 'heal', cost: 140, buildTime: 32 },
+    elite: { hp: 130 + undeadHp, mp: 35, shield: 14 + machineShield, attack: 36, defense: 5, range: 3, moveSpeed: 2.7 + beastSpeed, attackSpeed: 0.85, unitCost: 5, iconType: 'artillery', cost: 210, buildTime: 42 },
+    hero: { hp: 340 + undeadHp, mp: 90, shield: 45 + machineShield, attack: 48, defense: 10, range: style.id === 'arcane' ? 5 : 2, moveSpeed: 2.5 + beastSpeed, attackSpeed: 0.85, unitCost: 12, iconType: 'hero', cost: 520, buildTime: 70 },
   } satisfies Record<FactionWizardComposition['roles'][number], Omit<Unit, 'id' | 'raceId' | 'name' | 'role' | 'isHero' | 'attackType' | 'defenseType' | 'tags' | 'skills' | 'skillsV2' | 'notes' | 'createdAt' | 'updatedAt'>>;
   return table[role];
 }

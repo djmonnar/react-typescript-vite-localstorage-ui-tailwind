@@ -1,5 +1,6 @@
 import { Pause, Play, RotateCcw, SkipBack } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { UnitIcon } from './UnitIcon';
 import type {
   BattleReplay,
   BattleReplayAttackEvent,
@@ -20,7 +21,6 @@ interface ReplayUnitState extends BattleReplayUnit {
   shield: number;
   dead: boolean;
   tile: GridTile;
-  currentStackCount: number;
   activeBuffs: string[];
   lastAction: string;
 }
@@ -35,8 +35,8 @@ export function BattleReplayBoard({ replay }: BattleReplayBoardProps) {
   const [selectedUnitId, setSelectedUnitId] = useState('');
   const events = replay.events;
   const activeEvent = step > 0 ? events[step - 1] : undefined;
-  const gridWidth = replay.gridWidth ?? 8;
-  const gridHeight = replay.gridHeight ?? 5;
+  const gridWidth = replay.gridWidth ?? 10;
+  const gridHeight = replay.gridHeight ?? 6;
   const unitStates = useMemo(() => buildReplayState(replay, step), [replay, step]);
   const selectedUnit = unitStates.find((unit) => unit.combatantId === selectedUnitId) ?? unitStates[0];
   const progress = events.length > 0 ? Math.round((step / events.length) * 100) : 0;
@@ -148,7 +148,7 @@ export function BattleReplayBoard({ replay }: BattleReplayBoardProps) {
           {isAttackEvent(activeEvent) ? (
             <p className="mt-1 text-sm text-ink">
               피해 {activeEvent.damage} | 보호막 -{activeEvent.shieldDamage} | HP -{activeEvent.hpDamage}
-              {activeEvent.defeated ?? activeEvent.killed ? ' | 사망' : ''}
+              {activeEvent.defeated ?? activeEvent.killed ? ' | 쓰러짐' : ''}
             </p>
           ) : null}
           {isSkillEvent(activeEvent) ? (
@@ -162,16 +162,13 @@ export function BattleReplayBoard({ replay }: BattleReplayBoardProps) {
       <div className="rounded-md border border-line bg-[#070a10] p-2">
         <div className="mb-2 flex items-center justify-between font-mono text-[10px] font-bold text-muted">
           <span>A 팩션 | {replay.factionAName}</span>
-          <span>전술 타일 전장</span>
+          <span>전투 맵</span>
           <span>B 팩션 | {replay.factionBName}</span>
         </div>
-        <div
-          className="grid gap-1"
-          style={{ gridTemplateColumns: `repeat(${gridWidth}, minmax(0, 1fr))` }}
-        >
+        <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${gridWidth}, minmax(0, 1fr))` }}>
           {Array.from({ length: gridWidth * gridHeight }, (_, index) => {
             const tile = { x: index % gridWidth, y: Math.floor(index / gridWidth) };
-            const unit = unitStates.find((candidate) => candidate.tile.x === tile.x && candidate.tile.y === tile.y);
+            const unit = unitStates.find((candidate) => candidate.tile.x === tile.x && candidate.tile.y === tile.y && !candidate.dead);
             return (
               <div
                 className={`relative aspect-square min-h-11 rounded border ${
@@ -207,17 +204,12 @@ function buildReplayState(replay: BattleReplay, step: number): ReplayUnitState[]
   const replayTime = step > 0 ? (replay.events[Math.min(step - 1, replay.events.length - 1)]?.time ?? 0) : 0;
 
   for (const unit of replay.units) {
-    const hpPerUnit = unit.hpPerUnit ?? unit.maxHp;
-    const maxHp = unit.maxStackHp ?? unit.maxHp;
     state.set(unit.combatantId, {
       ...unit,
-      hp: maxHp,
+      hp: unit.maxHp,
       shield: unit.maxShield,
       dead: false,
-      tile: unit.initialTile ?? { x: Math.round(unit.initialPosition ?? 0), y: unit.team === 'A' ? 0 : 4 },
-      currentStackCount: unit.stackCount ?? 1,
-      hpPerUnit,
-      maxStackHp: maxHp,
+      tile: unit.initialTile ?? { x: Math.round(unit.initialPosition ?? 0), y: unit.team === 'A' ? 0 : 5 },
       activeBuffs: [],
       lastAction: '대기',
     });
@@ -247,7 +239,6 @@ function buildReplayState(replay: BattleReplay, step: number): ReplayUnitState[]
       if (event.defenderTile) target.tile = event.defenderTile;
       target.hp = Math.max(0, event.defenderHpAfter ?? event.targetHpAfter ?? target.hp);
       target.shield = Math.max(0, event.defenderShieldAfter ?? event.targetShieldAfter ?? target.shield);
-      target.currentStackCount = target.hp > 0 ? Math.max(1, Math.ceil(target.hp / (target.hpPerUnit ?? 1))) : 0;
       target.dead = Boolean(event.defeated ?? event.killed) || target.hp <= 0;
       target.lastAction = `피해 ${event.damage}`;
     }
@@ -265,7 +256,6 @@ function buildReplayState(replay: BattleReplay, step: number): ReplayUnitState[]
         if (tile) target.tile = tile;
         target.hp = Math.max(0, event.targetHpAfter?.[targetId] ?? target.hp);
         target.shield = Math.max(0, event.targetShieldAfter?.[targetId] ?? target.shield);
-        target.currentStackCount = target.hp > 0 ? Math.max(1, Math.ceil(target.hp / (target.hpPerUnit ?? 1))) : 0;
         target.dead = target.hp <= 0;
         target.lastAction = `${event.skillName} 적용`;
         if (
@@ -298,8 +288,7 @@ function BattlefieldToken({
   const moving = isMoveEvent(activeEvent) && activeEvent.unitId === unit.combatantId;
   const casting = isSkillEvent(activeEvent) && activeEvent.casterId === unit.combatantId;
   const skillTargeted = isSkillEvent(activeEvent) && activeEvent.targetIds.includes(unit.combatantId);
-  const maxHp = unit.maxStackHp ?? unit.maxHp;
-  const hpPercent = maxHp > 0 ? Math.round((unit.hp / maxHp) * 100) : 0;
+  const hpPercent = unit.maxHp > 0 ? Math.round((unit.hp / unit.maxHp) * 100) : 0;
   const shieldPercent = unit.maxShield > 0 ? Math.round((unit.shield / unit.maxShield) * 100) : 0;
 
   return (
@@ -317,8 +306,8 @@ function BattlefieldToken({
         <span className={`font-mono text-[9px] font-bold ${unit.team === 'A' ? 'text-cyan' : 'text-danger'}`}>{unit.team}</span>
         {unit.isHero ? <span className="text-[10px] font-bold text-amber">★</span> : null}
       </div>
+      <UnitIcon className="mx-auto h-4 w-4 text-ink" type={unit.iconType ?? (unit.isHero ? 'hero' : 'sword')} />
       <p className="truncate text-center text-[10px] font-bold text-ink">{shortUnitName(unit.name)}</p>
-      <p className="text-center font-mono text-[9px] text-muted">x{unit.currentStackCount}</p>
       <Bar color="bg-danger" percent={hpPercent} />
       <Bar color="bg-cyan" percent={shieldPercent} />
     </button>
@@ -326,20 +315,19 @@ function BattlefieldToken({
 }
 
 function ReplayUnitDetail({ unit }: { unit: ReplayUnitState }) {
-  const maxHp = unit.maxStackHp ?? unit.maxHp;
   return (
     <div className="rounded-md border border-line bg-[#0f141d] p-3">
       <div className="mb-2 flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-bold text-ink">{unit.isHero ? '★ ' : ''}{unit.name}</p>
           <p className="mt-1 text-xs text-muted">
-            {teamLabel(unit.team)} · 위치 ({unit.tile.x}, {unit.tile.y}) · 수량 x{unit.currentStackCount}
+            {teamLabel(unit.team)} · 위치 ({unit.tile.x}, {unit.tile.y})
           </p>
         </div>
-        <span className={`chip ${unit.dead ? 'opacity-50' : ''}`}>{unit.dead ? '사망' : '생존'}</span>
+        <span className={`chip ${unit.dead ? 'opacity-50' : ''}`}>{unit.dead ? '쓰러짐' : '생존'}</span>
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs">
-        <DetailItem label="HP" value={`${unit.hp}/${maxHp}`} />
+        <DetailItem label="HP" value={`${unit.hp}/${unit.maxHp}`} />
         <DetailItem label="보호막" value={unit.shield} />
         <DetailItem label="공격 타입" value={unit.attackTypeName ?? unit.attackType} />
         <DetailItem label="방어 타입" value={unit.defenseTypeName ?? unit.defenseType} />
