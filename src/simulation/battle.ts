@@ -267,11 +267,11 @@ function applyDynamicTraitBuffs(
   if (context.keepFullLog) {
     for (const [key, entry] of currentActiveTraits) {
       if (activeDynamicTraits.has(key)) continue;
-      context.logs.push(`[${time.toFixed(2).padStart(6, '0')}] TRAIT ON: ${entry.team}:${entry.traitName}`);
+      context.logs.push(`[${time.toFixed(2).padStart(6, '0')}] 특성 활성화: ${entry.team}:${entry.traitName}`);
     }
     for (const [key, entry] of activeDynamicTraits) {
       if (currentActiveTraits.has(key)) continue;
-      context.logs.push(`[${time.toFixed(2).padStart(6, '0')}] TRAIT OFF: ${entry.team}:${entry.traitName}`);
+      context.logs.push(`[${time.toFixed(2).padStart(6, '0')}] 특성 비활성화: ${entry.team}:${entry.traitName}`);
     }
   }
 
