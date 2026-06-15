@@ -107,6 +107,48 @@ export interface UnitDamage {
   damage: number;
 }
 
+export interface DamageShare {
+  unitId: Id;
+  name: string;
+  damage: number;
+  sharePercent: number;
+}
+
+export interface SurvivalRatio {
+  team: 'A' | 'B';
+  factionName: string;
+  initialCount: number;
+  remainingCount: number;
+  ratioPercent: number;
+}
+
+export interface TypeAdvantageReport {
+  attackTypeId: Id;
+  attackTypeName: string;
+  bonusDamage: number;
+  totalDamage: number;
+  hitCount: number;
+}
+
+export interface CostEfficiency {
+  unitId: Id;
+  name: string;
+  totalCost: number;
+  damage: number;
+  efficiency: number;
+}
+
+export interface BattleAnalysis {
+  winnerName: string;
+  topDamageUnit?: UnitDamage;
+  damageShares: DamageShare[];
+  survivalRatios: SurvivalRatio[];
+  topAdvantagedAttackType?: TypeAdvantageReport;
+  typeAdvantages: TypeAdvantageReport[];
+  costEfficiency: CostEfficiency[];
+  balanceSuggestions: string[];
+}
+
 export interface BattleResult {
   winner: 'A' | 'B' | 'Draw';
   factionAName?: string;
@@ -118,6 +160,7 @@ export interface BattleResult {
   mvpUnit: string;
   battleTime: number;
   logs: string[];
+  analysis?: BattleAnalysis;
 }
 
 export interface SimulationSummary extends BattleResult {
