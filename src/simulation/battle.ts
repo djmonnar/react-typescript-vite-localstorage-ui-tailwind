@@ -20,6 +20,8 @@ interface Combatant {
   unit: EffectiveUnit;
   hp: number;
   shield: number;
+  position: number;
+  lastMoveLogAt: number;
   nextAttackAt: number;
   damageDone: number;
 }
@@ -38,6 +40,10 @@ interface ArmyStats {
 }
 
 const MAX_TIME = 300;
+const BATTLEFIELD_LENGTH = 100;
+const TICK_DURATION = 0.25;
+const MOVE_EVENT_INTERVAL = 0.5;
+const RANGE_SCALE = 5;
 
 function matrixMultiplier(data: AppData, attackTypeId: string, defenseTypeId: string): number {
   return (
@@ -53,6 +59,25 @@ function cooldown(unit: EffectiveUnit): number {
 
 function alive(combatants: Combatant[], team?: 'A' | 'B') {
   return combatants.filter((combatant) => combatant.hp > 0 && (!team || combatant.team === team));
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function clampPosition(value: number): number {
+  return Math.max(0, Math.min(BATTLEFIELD_LENGTH, round2(value)));
+}
+
+function startingPosition(team: 'A' | 'B', unit: EffectiveUnit, order: number): number {
+  const laneOffset = (order % 6) * 1.15;
+  const heroOffset = (order % 3) * 0.55;
+
+  if (team === 'A') {
+    return clampPosition(unit.isHero ? 1.5 + heroOffset : 4 + laneOffset);
+  }
+
+  return clampPosition(unit.isHero ? 98.5 - heroOffset : 96 - laneOffset);
 }
 
 function expandArmy(data: AppData, entries: ArmyEntry[], team: 'A' | 'B'): Combatant[] {
@@ -71,6 +96,8 @@ function expandArmy(data: AppData, entries: ArmyEntry[], team: 'A' | 'B'): Comba
         unit: effective,
         hp: effective.effectiveHp,
         shield: effective.effectiveShield,
+        position: startingPosition(team, effective, order),
+        lastMoveLogAt: -MOVE_EVENT_INTERVAL,
         nextAttackAt: Number((Math.random() * cooldown(effective)).toFixed(2)),
         damageDone: 0,
       });
@@ -80,16 +107,38 @@ function expandArmy(data: AppData, entries: ArmyEntry[], team: 'A' | 'B'): Comba
   return result;
 }
 
-function selectTarget(attacker: Combatant, enemies: Combatant[]): Combatant {
-  if (attacker.unit.range <= 1) {
-    return [...enemies].sort((left, right) => left.order - right.order || left.hp - right.hp)[0];
-  }
+function attackRange(unit: EffectiveUnit): number {
+  return Math.max(1, unit.range) * RANGE_SCALE;
+}
 
-  const preferLowHp = Math.random() > 0.35;
-  if (preferLowHp) {
-    return [...enemies].sort((left, right) => left.hp + left.shield - (right.hp + right.shield))[0];
-  }
-  return [...enemies].sort((left, right) => left.order - right.order)[0];
+function distance(left: Combatant, right: Combatant): number {
+  return Math.abs(left.position - right.position);
+}
+
+function selectClosest(attacker: Combatant, enemies: Combatant[]): Combatant {
+  return [...enemies].sort((left, right) => distance(attacker, left) - distance(attacker, right))[0];
+}
+
+function selectTargetInRange(attacker: Combatant, enemies: Combatant[]): Combatant | undefined {
+  const range = attackRange(attacker.unit);
+  const inRange = enemies.filter((enemy) => distance(attacker, enemy) <= range);
+  if (inRange.length === 0) return undefined;
+
+  return [...inRange].sort((left, right) => {
+    const distanceDelta = distance(attacker, left) - distance(attacker, right);
+    if (attacker.unit.range <= 1 || Math.abs(distanceDelta) > RANGE_SCALE) return distanceDelta;
+    return left.hp + left.shield - (right.hp + right.shield);
+  })[0];
+}
+
+function moveToward(attacker: Combatant, target: Combatant): { fromPosition: number; toPosition: number } {
+  const fromPosition = attacker.position;
+  const gapToRange = Math.max(0, distance(attacker, target) - attackRange(attacker.unit));
+  const movement = Math.min(attacker.unit.effectiveMoveSpeed * TICK_DURATION, gapToRange);
+  const direction = target.position > attacker.position ? 1 : -1;
+
+  attacker.position = clampPosition(attacker.position + direction * movement);
+  return { fromPosition, toPosition: attacker.position };
 }
 
 function attackTypeName(data: AppData, attackTypeId: string): string {
@@ -181,6 +230,7 @@ function buildReplayUnits(combatants: Combatant[]): BattleReplay['units'] {
     maxShield: combatant.unit.effectiveShield,
     attackType: combatant.unit.attackType,
     defenseType: combatant.unit.defenseType,
+    initialPosition: combatant.position,
   }));
 }
 
@@ -423,76 +473,143 @@ function mergeManyAnalysis(results: BattleResult[], aggregate: {
   };
 }
 
-export function simulateBattle(data: AppData, preset: BattlePreset, keepFullLog = true): BattleResult {
+interface SimulateBattleOptions {
+  keepFullLog: boolean;
+  recordReplay: boolean;
+}
+
+function normalizeBattleOptions(options: boolean | Partial<SimulateBattleOptions>): SimulateBattleOptions {
+  if (typeof options === 'boolean') {
+    return { keepFullLog: options, recordReplay: options };
+  }
+
+  return {
+    keepFullLog: options.keepFullLog ?? true,
+    recordReplay: options.recordReplay ?? options.keepFullLog ?? true,
+  };
+}
+
+export function simulateBattle(
+  data: AppData,
+  preset: BattlePreset,
+  options: boolean | Partial<SimulateBattleOptions> = true,
+): BattleResult {
+  const { keepFullLog, recordReplay } = normalizeBattleOptions(options);
   const factionAName = data.races.find((race) => race.id === preset.raceAId)?.name ?? 'A';
   const factionBName = data.races.find((race) => race.id === preset.raceBId)?.name ?? 'B';
   const combatants = [...expandArmy(data, preset.armyA, 'A'), ...expandArmy(data, preset.armyB, 'B')];
   const armyStats = collectArmyStats(combatants);
-  const replayUnits = buildReplayUnits(combatants);
+  const replayUnits = recordReplay ? buildReplayUnits(combatants) : [];
   const replayEvents: BattleReplayEvent[] = [];
   const typeAdvantages = new Map<string, TypeAdvantageReport>();
   const logs: string[] = [`[00.00] SIM: ${preset.name} 교전 시작`];
   let time = 0;
 
   while (time <= MAX_TIME && alive(combatants, 'A').length > 0 && alive(combatants, 'B').length > 0) {
-    const actor = alive(combatants).sort((left, right) => left.nextAttackAt - right.nextAttackAt)[0];
-    time = actor.nextAttackAt;
-    if (time > MAX_TIME) break;
+    const actors = alive(combatants).sort((left, right) => left.team.localeCompare(right.team) || left.order - right.order);
 
-    const enemies = alive(combatants, actor.team === 'A' ? 'B' : 'A');
-    if (enemies.length === 0) break;
+    for (const actor of actors) {
+      if (actor.hp <= 0) continue;
 
-    const target = selectTarget(actor, enemies);
-    const beforeShield = target.shield;
-    const beforeHp = target.hp;
-    const damageResult = applyDamage(actor, target, data);
-    const damage = damageResult.damage;
-    const hpDelta = beforeHp - target.hp;
-    const shieldDelta = beforeShield - target.shield;
-    const typeAdvantage = typeAdvantages.get(actor.unit.attackType);
-    const killed = target.hp <= 0;
+      const enemies = alive(combatants, actor.team === 'A' ? 'B' : 'A');
+      if (enemies.length === 0) break;
 
-    replayEvents.push({
-      id: `evt_${replayEvents.length}_${actor.id}_${target.id}`,
-      index: replayEvents.length,
-      time: Number(time.toFixed(2)),
-      attackerId: actor.id,
-      attackerName: actor.unit.name,
-      targetId: target.id,
-      targetName: target.unit.name,
-      damage,
-      shieldDamage: shieldDelta,
-      hpDamage: hpDelta,
-      targetHpAfter: target.hp,
-      targetShieldAfter: target.shield,
-      killed,
-    });
+      const targetInRange = selectTargetInRange(actor, enemies);
 
-    if (typeAdvantage) {
-      typeAdvantage.bonusDamage += damageResult.bonusDamage;
-      typeAdvantage.totalDamage += damageResult.damage;
-      typeAdvantage.hitCount += 1;
-    } else {
-      typeAdvantages.set(actor.unit.attackType, {
-        attackTypeId: actor.unit.attackType,
-        attackTypeName: attackTypeName(data, actor.unit.attackType),
-        bonusDamage: damageResult.bonusDamage,
-        totalDamage: damageResult.damage,
-        hitCount: 1,
-      });
+      if (targetInRange && time >= actor.nextAttackAt) {
+        const beforeShield = targetInRange.shield;
+        const beforeHp = targetInRange.hp;
+        const damageResult = applyDamage(actor, targetInRange, data);
+        const damage = damageResult.damage;
+        const hpDelta = beforeHp - targetInRange.hp;
+        const shieldDelta = beforeShield - targetInRange.shield;
+        const typeAdvantage = typeAdvantages.get(actor.unit.attackType);
+        const defeated = targetInRange.hp <= 0;
+
+        if (recordReplay) {
+          replayEvents.push({
+            id: `evt_${replayEvents.length}_${actor.id}_${targetInRange.id}`,
+            index: replayEvents.length,
+            type: 'attack',
+            time: round2(time),
+            attackerId: actor.id,
+            attackerName: actor.unit.name,
+            attackerTeam: actor.team,
+            attackerPosition: actor.position,
+            defenderId: targetInRange.id,
+            defenderName: targetInRange.unit.name,
+            defenderTeam: targetInRange.team,
+            defenderPosition: targetInRange.position,
+            targetId: targetInRange.id,
+            targetName: targetInRange.unit.name,
+            damage,
+            shieldDamage: shieldDelta,
+            hpDamage: hpDelta,
+            multiplier: damageResult.multiplier,
+            attackType: actor.unit.attackType,
+            defenseType: targetInRange.unit.defenseType,
+            defenderHpAfter: targetInRange.hp,
+            defenderShieldAfter: targetInRange.shield,
+            targetHpAfter: targetInRange.hp,
+            targetShieldAfter: targetInRange.shield,
+            defeated,
+            killed: defeated,
+          });
+        }
+
+        if (typeAdvantage) {
+          typeAdvantage.bonusDamage += damageResult.bonusDamage;
+          typeAdvantage.totalDamage += damageResult.damage;
+          typeAdvantage.hitCount += 1;
+        } else {
+          typeAdvantages.set(actor.unit.attackType, {
+            attackTypeId: actor.unit.attackType,
+            attackTypeName: attackTypeName(data, actor.unit.attackType),
+            bonusDamage: damageResult.bonusDamage,
+            totalDamage: damageResult.damage,
+            hitCount: 1,
+          });
+        }
+
+        if (keepFullLog) {
+          logs.push(
+            `[${time.toFixed(2).padStart(6, '0')}] ${actor.team}:${actor.unit.name}@${actor.position.toFixed(1)} -> ${targetInRange.team}:${targetInRange.unit.name}@${targetInRange.position.toFixed(1)} DMG ${damage} x${damageResult.multiplier} (S-${shieldDelta}, HP-${hpDelta})`,
+          );
+        }
+
+        if (defeated) {
+          logs.push(`[${time.toFixed(2).padStart(6, '0')}] DOWN: ${targetInRange.team}:${targetInRange.unit.name}`);
+        }
+
+        actor.nextAttackAt = round2(time + cooldown(actor.unit));
+        continue;
+      }
+
+      if (!targetInRange) {
+        const closestEnemy = selectClosest(actor, enemies);
+        const { fromPosition, toPosition } = moveToward(actor, closestEnemy);
+        if (
+          recordReplay &&
+          fromPosition !== toPosition &&
+          time - actor.lastMoveLogAt >= MOVE_EVENT_INTERVAL - 0.001
+        ) {
+          replayEvents.push({
+            id: `evt_${replayEvents.length}_${actor.id}_move`,
+            index: replayEvents.length,
+            type: 'move',
+            time: round2(time),
+            unitId: actor.id,
+            unitName: actor.unit.name,
+            team: actor.team,
+            fromPosition,
+            toPosition,
+          });
+          actor.lastMoveLogAt = time;
+        }
+      }
     }
 
-    if (keepFullLog) {
-      logs.push(
-        `[${time.toFixed(2).padStart(6, '0')}] ${actor.team}:${actor.unit.name} -> ${target.team}:${target.unit.name} DMG ${damage} (S-${shieldDelta}, HP-${hpDelta})`,
-      );
-    }
-
-    if (killed) {
-      logs.push(`[${time.toFixed(2).padStart(6, '0')}] DOWN: ${target.team}:${target.unit.name}`);
-    }
-
-    actor.nextAttackAt = Number((time + cooldown(actor.unit)).toFixed(2));
+    time = round2(time + TICK_DURATION);
   }
 
   const aliveA = alive(combatants, 'A').length;
@@ -528,18 +645,24 @@ export function simulateBattle(data: AppData, preset: BattlePreset, keepFullLog 
     battleTime,
     logs,
     analysis,
-    replay: {
-      factionAName,
-      factionBName,
-      duration: battleTime,
-      units: replayUnits,
-      events: replayEvents,
-    },
+    ...(recordReplay
+      ? {
+          replay: {
+            factionAName,
+            factionBName,
+            duration: battleTime,
+            units: replayUnits,
+            events: replayEvents,
+          },
+        }
+      : {}),
   };
 }
 
 export function simulateMany(data: AppData, preset: BattlePreset, runs = 100): SimulationSummary {
-  const results = Array.from({ length: runs }, () => simulateBattle(data, preset, false));
+  const results = Array.from({ length: runs }, () =>
+    simulateBattle(data, preset, { keepFullLog: false, recordReplay: false }),
+  );
   const winsA = results.filter((result) => result.winner === 'A').length;
   const winsB = results.filter((result) => result.winner === 'B').length;
   const averageTime = results.reduce((sum, result) => sum + result.battleTime, 0) / runs;

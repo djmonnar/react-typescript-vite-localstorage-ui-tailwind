@@ -160,23 +160,52 @@ export interface BattleReplayUnit {
   maxShield: number;
   attackType: Id;
   defenseType: Id;
+  initialPosition: number;
 }
 
-export interface BattleReplayEvent {
+export interface BattleReplayBaseEvent {
   id: Id;
   index: number;
   time: number;
+  type?: 'attack' | 'move';
+}
+
+export interface BattleReplayAttackEvent extends BattleReplayBaseEvent {
+  type?: 'attack';
   attackerId: Id;
   attackerName: string;
-  targetId: Id;
-  targetName: string;
+  attackerTeam?: 'A' | 'B';
+  attackerPosition?: number;
+  defenderId?: Id;
+  defenderName?: string;
+  defenderTeam?: 'A' | 'B';
+  defenderPosition?: number;
   damage: number;
   shieldDamage: number;
   hpDamage: number;
-  targetHpAfter: number;
-  targetShieldAfter: number;
-  killed: boolean;
+  multiplier?: number;
+  attackType?: Id;
+  defenseType?: Id;
+  defenderHpAfter?: number;
+  defenderShieldAfter?: number;
+  defeated?: boolean;
+  targetId?: Id;
+  targetName?: string;
+  targetHpAfter?: number;
+  targetShieldAfter?: number;
+  killed?: boolean;
 }
+
+export interface BattleReplayMoveEvent extends BattleReplayBaseEvent {
+  type: 'move';
+  unitId: Id;
+  unitName: string;
+  team: 'A' | 'B';
+  fromPosition: number;
+  toPosition: number;
+}
+
+export type BattleReplayEvent = BattleReplayAttackEvent | BattleReplayMoveEvent;
 
 export interface BattleReplay {
   factionAName: string;
