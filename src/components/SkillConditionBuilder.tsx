@@ -13,6 +13,7 @@ import { NumberStepper } from './NumberStepper';
 
 interface SkillConditionBuilderProps {
   availableTags: string[];
+  defaultOpen?: boolean;
   onUpdate: (patch: Partial<Skill>) => void;
   skill: Skill;
 }
@@ -41,7 +42,7 @@ function defaultCondition(): SkillCondition {
   };
 }
 
-export function SkillConditionBuilder({ availableTags, onUpdate, skill }: SkillConditionBuilderProps) {
+export function SkillConditionBuilder({ availableTags, defaultOpen = false, onUpdate, skill }: SkillConditionBuilderProps) {
   const conditions = skill.conditions?.length ? skill.conditions : [defaultCondition()];
 
   const updateCondition = (conditionId: string, patch: Partial<SkillCondition>) => {
@@ -69,16 +70,19 @@ export function SkillConditionBuilder({ availableTags, onUpdate, skill }: SkillC
   };
 
   return (
-    <div className="space-y-3 rounded-md border border-cyan/20 bg-cyan/5 p-3">
-      <div className="space-y-1">
-        <p className="text-sm font-bold text-cyan">전술 조건 빌더</p>
+    <details className="rounded-md border border-cyan/20 bg-cyan/5 p-3 open:space-y-3" open={defaultOpen}>
+      <summary className="cursor-pointer list-none space-y-2 marker:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-bold text-cyan">추가 사용 조건</p>
+          <span className="rounded-md border border-cyan/20 bg-[#0b1018] px-2 py-1 text-[10px] text-muted">열기/닫기</span>
+        </div>
         <p className="text-xs leading-relaxed text-muted">
-          스킬이 실제로 발동하기 전에 검사할 조건입니다. 여러 조건을 AND/OR로 묶어 전술 우선순위를 만들 수 있습니다.
+          발동 타이밍이 왔을 때, 이 조건을 만족해야 실제로 스킬을 사용합니다.
         </p>
         <p className="rounded-md border border-cyan/20 bg-[#0b1018] px-3 py-2 text-xs leading-relaxed text-ink">
           {formatSkillConditions({ ...skill, conditions })}
         </p>
-      </div>
+      </summary>
 
       <label className="block">
         <span className="label">조건 연결 방식</span>
@@ -217,6 +221,6 @@ export function SkillConditionBuilder({ availableTags, onUpdate, skill }: SkillC
         <Plus size={16} />
         조건 추가
       </button>
-    </div>
+    </details>
   );
 }

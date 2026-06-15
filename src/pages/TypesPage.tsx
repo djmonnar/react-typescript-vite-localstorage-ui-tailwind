@@ -775,7 +775,7 @@ function SkillTemplateSettings({
             <p className="text-sm leading-relaxed text-ink">{formatSkillAutoDescription(selectedSkill)}</p>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <SelectField label="발동 조건" labels={skillTriggerLabels} onChange={(trigger) => onUpdate({ trigger: trigger as SkillTrigger })} options={skillTriggers} value={selectedSkill.trigger} />
+            <SelectField label="발동 타이밍" labels={skillTriggerLabels} onChange={(trigger) => onUpdate({ trigger: trigger as SkillTrigger })} options={skillTriggers} value={selectedSkill.trigger} />
             <SelectField label="대상" labels={skillTargetLabels} onChange={(target) => onUpdate({ target: target as SkillTarget })} options={skillTargets} value={selectedSkill.target} />
             <SelectField label="효과" labels={skillEffectLabels} onChange={(effectType) => onUpdate({ effectType: effectType as SkillEffectType })} options={skillEffects} value={selectedSkill.effectType} />
             {selectedSkill.effectType === 'damage' ? (

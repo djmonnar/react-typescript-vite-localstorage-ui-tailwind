@@ -806,7 +806,7 @@ function SkillEditor({
         <TextField label="스킬명" onChange={(name) => onUpdate({ name })} value={skill.name} />
         <TextField label="설명" onChange={(description) => onUpdate({ description })} value={skill.description} />
         <SkillSelect
-          label="발동 조건"
+          label="발동 타이밍"
           labels={skillTriggerLabels}
           onChange={(trigger) => onUpdate({ trigger: trigger as SkillTrigger })}
           options={skillTriggers}
@@ -842,6 +842,10 @@ function SkillEditor({
         <NumberStepper label="쿨타임" onChange={(cooldown) => onUpdate({ cooldown })} step={0.5} value={skill.cooldown} />
         <NumberStepper label="MP 소모" onChange={(mpCost) => onUpdate({ mpCost })} value={skill.mpCost} />
         <NumberStepper label="발동 확률 %" max={100} onChange={(chance) => onUpdate({ chance })} value={skill.chance} />
+      </div>
+
+      <div className="mt-3">
+        <SkillConditionBuilder availableTags={availableTags} onUpdate={onUpdate} skill={skill} />
       </div>
 
       <button className="btn mt-3 w-full" onClick={() => setShowAdvanced((current) => !current)} type="button">
@@ -905,7 +909,6 @@ function SkillEditor({
             selectedTags={skill.targetTags ?? []}
             onChange={(targetTags) => onUpdate({ targetTags })}
           />
-          <SkillConditionBuilder availableTags={availableTags} onUpdate={onUpdate} skill={skill} />
           <pre className="max-h-60 overflow-auto rounded-md border border-line bg-[#05070a] p-3 font-mono text-[10px] leading-relaxed text-acid">
             {JSON.stringify(skill, null, 2)}
           </pre>
