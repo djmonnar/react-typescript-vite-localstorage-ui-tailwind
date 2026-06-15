@@ -7,7 +7,7 @@ interface BottomNavProps {
 }
 
 const tabs: Array<{ key: TabKey; label: string; icon: typeof BookOpen }> = [
-  { key: 'races', label: '종족', icon: BookOpen },
+  { key: 'races', label: '팩션', icon: BookOpen },
   { key: 'units', label: '유닛', icon: Bot },
   { key: 'types', label: '상성', icon: Crosshair },
   { key: 'battle', label: '전투', icon: Swords },

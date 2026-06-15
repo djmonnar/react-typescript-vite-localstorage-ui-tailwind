@@ -124,6 +124,8 @@ function aggregateRemaining(combatants: Combatant[]): BattleResult['remainingUni
 }
 
 export function simulateBattle(data: AppData, preset: BattlePreset, keepFullLog = true): BattleResult {
+  const factionAName = data.races.find((race) => race.id === preset.raceAId)?.name ?? 'A';
+  const factionBName = data.races.find((race) => race.id === preset.raceBId)?.name ?? 'B';
   const combatants = [...expandArmy(data, preset.armyA, 'A'), ...expandArmy(data, preset.armyB, 'B')];
   const logs: string[] = [`[00.00] SIM: ${preset.name} 교전 시작`];
   let time = 0;
@@ -167,6 +169,8 @@ export function simulateBattle(data: AppData, preset: BattlePreset, keepFullLog 
 
   return {
     winner,
+    factionAName,
+    factionBName,
     winRateA: winner === 'A' ? 100 : 0,
     winRateB: winner === 'B' ? 100 : 0,
     remainingUnits: aggregateRemaining(combatants),

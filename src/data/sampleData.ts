@@ -25,7 +25,7 @@ export const traits: Trait[] = [
     effectType: 'allDefenseFlat',
     targetFilter: {},
     value: 2,
-    notes: '철갑연맹 기본 종족 특성',
+    notes: '철갑연맹 기본 팩션 특성',
   },
   {
     id: 'trait_beast_speed',
@@ -34,7 +34,7 @@ export const traits: Trait[] = [
     effectType: 'moveSpeedPercent',
     targetFilter: {},
     value: 10,
-    notes: '야수부족 기본 종족 특성',
+    notes: '야수부족 기본 팩션 특성',
   },
 ];
 
@@ -195,7 +195,7 @@ export const races: Race[] = [
   {
     id: 'race_beast',
     name: '야수부족',
-    concept: '빠르고 공격적인 생체 전투 종족',
+    concept: '빠르고 공격적인 생체 전투 팩션',
     description: '무리 사냥과 속도로 적을 압도하는 부족. 전투가 길어지기 전 결판을 낸다.',
     traitIds: ['trait_beast_speed'],
     unitIds: ['unit_wolf_warrior', 'unit_venom_hunter', 'unit_khan'],
@@ -251,7 +251,7 @@ export const sampleData: AppData = {
         { unitId: 'unit_venom_hunter', count: 3 },
         { unitId: 'unit_khan', count: 1 },
       ],
-      notes: '샘플 종족 간 기본 전투 실험',
+      notes: '샘플 팩션 간 기본 전투 실험',
     },
   ],
 };

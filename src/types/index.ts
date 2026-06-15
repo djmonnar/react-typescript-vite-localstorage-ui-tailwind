@@ -109,6 +109,8 @@ export interface UnitDamage {
 
 export interface BattleResult {
   winner: 'A' | 'B' | 'Draw';
+  factionAName?: string;
+  factionBName?: string;
   winRateA: number;
   winRateB: number;
   remainingUnits: RemainingUnit[];

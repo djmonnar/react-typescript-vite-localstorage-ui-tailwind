@@ -17,6 +17,12 @@ export function LogsPage({ data, setData, replaceData, resetData }: LogsPageProp
   const result = data.lastResult;
   const exported = useMemo(() => exportData(data), [data]);
   const isSummary = result && 'runs' in result;
+  const winnerLabel =
+    result?.winner === 'A'
+      ? (result.factionAName ?? 'A')
+      : result?.winner === 'B'
+        ? (result.factionBName ?? 'B')
+        : '무승부';
 
   const applyImport = () => {
     try {
@@ -37,10 +43,14 @@ export function LogsPage({ data, setData, replaceData, resetData }: LogsPageProp
       {result ? (
         <section className="panel space-y-3">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Metric label="승자" value={result.winner} />
+            <Metric label="승자" value={winnerLabel} />
             <Metric label="A 승률" value={`${result.winRateA}%`} />
             <Metric label="B 승률" value={`${result.winRateB}%`} />
             <Metric label="전투 시간" value={`${result.battleTime}s`} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Metric label="A 팩션" value={result.factionAName ?? 'A'} />
+            <Metric label="B 팩션" value={result.factionBName ?? 'B'} />
           </div>
           {isSummary ? (
             <div className="grid grid-cols-2 gap-2">

@@ -2,14 +2,14 @@ import { useMemo, useState } from 'react';
 import { BottomNav } from './components/BottomNav';
 import { usePersistentData } from './hooks/usePersistentData';
 import { BattlePage } from './pages/BattlePage';
+import { FactionsPage } from './pages/FactionsPage';
 import { LogsPage } from './pages/LogsPage';
-import { RacesPage } from './pages/RacesPage';
 import { TypesPage } from './pages/TypesPage';
 import { UnitsPage } from './pages/UnitsPage';
 import type { TabKey } from './types';
 
 const pageTitle: Record<TabKey, string> = {
-  races: 'RACE.DATA',
+  races: 'FACTION.DATA',
   units: 'UNIT.EDITOR',
   types: 'TYPE.MATRIX',
   battle: 'BATTLE.SIM',
@@ -20,7 +20,7 @@ export function App() {
   const [tab, setTab] = useState<TabKey>('races');
   const { data, setData, replaceData, resetData } = usePersistentData();
   const counts = useMemo(
-    () => `${data.races.length} races / ${data.units.length} units / ${data.traits.length} traits`,
+    () => `${data.races.length} factions / ${data.units.length} units / ${data.traits.length} traits`,
     [data.races.length, data.traits.length, data.units.length],
   );
 
@@ -31,7 +31,7 @@ export function App() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="font-mono text-xs font-semibold text-cyan">{pageTitle[tab]}</p>
-              <h1 className="mt-1 text-xl font-black text-ink">창작 종족 전투 실험실</h1>
+              <h1 className="mt-1 text-xl font-black text-ink">창작 팩션 전투 실험실</h1>
             </div>
             <div className="hidden rounded-md border border-line bg-panel px-3 py-2 font-mono text-xs text-muted sm:block">
               {counts}
@@ -41,7 +41,7 @@ export function App() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-4">
-        {tab === 'races' ? <RacesPage data={data} setData={setData} /> : null}
+        {tab === 'races' ? <FactionsPage data={data} setData={setData} /> : null}
         {tab === 'units' ? <UnitsPage data={data} setData={setData} /> : null}
         {tab === 'types' ? <TypesPage data={data} setData={setData} /> : null}
         {tab === 'battle' ? <BattlePage data={data} goLogs={() => setTab('logs')} setData={setData} /> : null}

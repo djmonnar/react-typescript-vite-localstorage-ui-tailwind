@@ -161,7 +161,7 @@ export function TypesPage({ data, setData }: TypesPageProps) {
   return (
     <div className="space-y-4">
       <SectionHeader
-        subtitle="공격/방어 타입과 배율, 종족 특성을 직접 편집합니다."
+        subtitle="공격/방어 타입과 배율, 팩션 특성을 직접 편집합니다."
         title="상성표"
       />
 
@@ -274,7 +274,7 @@ export function TypesPage({ data, setData }: TypesPageProps) {
 
       <section className="panel space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="font-semibold text-ink">종족 특성</h3>
+          <h3 className="font-semibold text-ink">팩션 특성</h3>
           <button className="btn btn-primary" onClick={addTrait} type="button">
             <Plus size={16} />
             추가

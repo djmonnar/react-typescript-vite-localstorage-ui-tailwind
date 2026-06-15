@@ -16,10 +16,10 @@ interface BattlePageProps {
 export function BattlePage({ data, setData, goLogs }: BattlePageProps) {
   const [presetId, setPresetId] = useState(data.battlePresets[0]?.id ?? '');
   const preset = data.battlePresets.find((candidate) => candidate.id === presetId) ?? data.battlePresets[0];
-  const raceA = data.races.find((race) => race.id === preset?.raceAId) ?? data.races[0];
-  const raceB = data.races.find((race) => race.id === preset?.raceBId) ?? data.races[1] ?? data.races[0];
-  const unitsA = useMemo(() => data.units.filter((unit) => unit.raceId === raceA?.id), [data.units, raceA?.id]);
-  const unitsB = useMemo(() => data.units.filter((unit) => unit.raceId === raceB?.id), [data.units, raceB?.id]);
+  const factionA = data.races.find((race) => race.id === preset?.raceAId) ?? data.races[0];
+  const factionB = data.races.find((race) => race.id === preset?.raceBId) ?? data.races[1] ?? data.races[0];
+  const unitsA = useMemo(() => data.units.filter((unit) => unit.raceId === factionA?.id), [data.units, factionA?.id]);
+  const unitsB = useMemo(() => data.units.filter((unit) => unit.raceId === factionB?.id), [data.units, factionB?.id]);
 
   useEffect(() => {
     if (!data.battlePresets.some((candidate) => candidate.id === presetId)) {
@@ -61,8 +61,6 @@ export function BattlePage({ data, setData, goLogs }: BattlePageProps) {
     updatePreset({ [key]: entries } as Pick<BattlePreset, 'armyA' | 'armyB'>);
   };
 
-  const countFor = (army: ArmyEntry[], unitId: string) => army.find((entry) => entry.unitId === unitId)?.count ?? 0;
-
   const runOnce = () => {
     if (!preset) return;
     const result = simulateBattle(data, preset, true);
@@ -82,11 +80,11 @@ export function BattlePage({ data, setData, goLogs }: BattlePageProps) {
       <div className="space-y-4">
         <SectionHeader
           action={
-            <button className="btn btn-primary" onClick={addPreset} type="button">
-              전투 추가
-            </button>
-          }
-          title="전투 시뮬레이션"
+          <button className="btn btn-primary" onClick={addPreset} type="button">
+            전투 추가
+          </button>
+        }
+        title="전투 시뮬레이션"
         />
         <p className="panel text-sm text-muted">전투 프리셋이 없습니다.</p>
       </div>
@@ -101,7 +99,7 @@ export function BattlePage({ data, setData, goLogs }: BattlePageProps) {
             전투 추가
           </button>
         }
-        subtitle="두 종족의 편성 수량을 정하고 자동 전투를 실행합니다."
+        subtitle="두 팩션의 편성 수량을 정하고 자동 전투를 실행합니다."
         title="전투 시뮬레이션"
       />
 
@@ -124,7 +122,7 @@ export function BattlePage({ data, setData, goLogs }: BattlePageProps) {
         <TextField label="프리셋 이름" onChange={(name) => updatePreset({ name })} value={preset.name} />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className="label">A 종족</span>
+            <span className="label">A 팩션</span>
             <select
               className="field"
               onChange={(event) => updatePreset({ raceAId: event.target.value, armyA: [] })}
@@ -138,7 +136,7 @@ export function BattlePage({ data, setData, goLogs }: BattlePageProps) {
             </select>
           </label>
           <label className="block">
-            <span className="label">B 종족</span>
+            <span className="label">B 팩션</span>
             <select
               className="field"
               onChange={(event) => updatePreset({ raceBId: event.target.value, armyB: [] })}
@@ -158,13 +156,13 @@ export function BattlePage({ data, setData, goLogs }: BattlePageProps) {
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <ArmyEditor
           army={preset.armyA}
-          label={`A: ${raceA?.name ?? '없음'}`}
+          label={`A: ${factionA?.name ?? '없음'}`}
           onChange={(unitId, count) => setArmyCount('A', unitId, count)}
           units={unitsA}
         />
         <ArmyEditor
           army={preset.armyB}
-          label={`B: ${raceB?.name ?? '없음'}`}
+          label={`B: ${factionB?.name ?? '없음'}`}
           onChange={(unitId, count) => setArmyCount('B', unitId, count)}
           units={unitsB}
         />
@@ -211,7 +209,7 @@ function ArmyEditor({ label, units, army, onChange }: ArmyEditorProps) {
           <NumberStepper label="수량" onChange={(count) => onChange(unit.id, count)} value={countForLocal(army, unit.id)} />
         </div>
       ))}
-      {units.length === 0 ? <p className="text-sm text-muted">선택한 종족에 유닛이 없습니다.</p> : null}
+      {units.length === 0 ? <p className="text-sm text-muted">선택한 팩션에 유닛이 없습니다.</p> : null}
     </section>
   );
 }

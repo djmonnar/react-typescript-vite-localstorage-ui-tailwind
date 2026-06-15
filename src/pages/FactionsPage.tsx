@@ -5,15 +5,15 @@ import { TextField } from '../components/TextField';
 import type { AppData, Race } from '../types';
 import { createId, nowIso } from '../utils/ids';
 
-interface RacesPageProps {
+interface FactionsPageProps {
   data: AppData;
   setData: (updater: (current: AppData) => AppData) => void;
 }
 
-export function RacesPage({ data, setData }: RacesPageProps) {
+export function FactionsPage({ data, setData }: FactionsPageProps) {
   const [selectedId, setSelectedId] = useState(data.races[0]?.id ?? '');
-  const race = data.races.find((candidate) => candidate.id === selectedId) ?? data.races[0];
-  const raceUnits = data.units.filter((unit) => unit.raceId === race?.id);
+  const faction = data.races.find((candidate) => candidate.id === selectedId) ?? data.races[0];
+  const factionUnits = data.units.filter((unit) => unit.raceId === faction?.id);
 
   useEffect(() => {
     if (!data.races.some((candidate) => candidate.id === selectedId)) {
@@ -21,22 +21,22 @@ export function RacesPage({ data, setData }: RacesPageProps) {
     }
   }, [data.races, selectedId]);
 
-  const updateRace = (patch: Partial<Race>) => {
-    if (!race) return;
+  const updateFaction = (patch: Partial<Race>) => {
+    if (!faction) return;
     setData((current) => ({
       ...current,
       races: current.races.map((candidate) =>
-        candidate.id === race.id ? { ...candidate, ...patch, updatedAt: nowIso() } : candidate,
+        candidate.id === faction.id ? { ...candidate, ...patch, updatedAt: nowIso() } : candidate,
       ),
     }));
   };
 
-  const addRace = () => {
+  const addFaction = () => {
     const id = createId('race');
-    const nextRace: Race = {
+    const nextFaction: Race = {
       id,
-      name: '새 종족',
-      concept: '컨셉 입력',
+      name: '새 팩션',
+      concept: '팩션 컨셉 입력',
       description: '',
       traitIds: [],
       unitIds: [],
@@ -45,35 +45,35 @@ export function RacesPage({ data, setData }: RacesPageProps) {
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
-    setData((current) => ({ ...current, races: [...current.races, nextRace] }));
+    setData((current) => ({ ...current, races: [...current.races, nextFaction] }));
     setSelectedId(id);
   };
 
-  const deleteRace = () => {
-    if (!race) return;
+  const deleteFaction = () => {
+    if (!faction) return;
     setData((current) => ({
       ...current,
-      races: current.races.filter((candidate) => candidate.id !== race.id),
-      units: current.units.filter((unit) => unit.raceId !== race.id),
+      races: current.races.filter((candidate) => candidate.id !== faction.id),
+      units: current.units.filter((unit) => unit.raceId !== faction.id),
       battlePresets: current.battlePresets.filter(
-        (preset) => preset.raceAId !== race.id && preset.raceBId !== race.id,
+        (preset) => preset.raceAId !== faction.id && preset.raceBId !== faction.id,
       ),
     }));
   };
 
-  if (!race) {
+  if (!faction) {
     return (
       <div className="space-y-4">
         <SectionHeader
           action={
-            <button className="btn btn-primary" onClick={addRace} type="button">
+            <button className="btn btn-primary" onClick={addFaction} type="button">
               <Plus size={16} />
               추가
             </button>
           }
-          title="종족"
+          title="팩션"
         />
-        <p className="panel text-sm text-muted">종족이 없습니다. 새 종족을 추가하세요.</p>
+        <p className="panel text-sm text-muted">팩션이 없습니다. 새 팩션을 추가하세요.</p>
       </div>
     );
   }
@@ -82,20 +82,20 @@ export function RacesPage({ data, setData }: RacesPageProps) {
     <div className="space-y-4">
       <SectionHeader
         action={
-          <button className="btn btn-primary" onClick={addRace} type="button">
+          <button className="btn btn-primary" onClick={addFaction} type="button">
             <Plus size={16} />
             추가
           </button>
         }
-        subtitle="종족 컨셉, 특성, 대표 영웅, 메모를 관리합니다."
-        title="종족 관리"
+        subtitle="팩션 컨셉, 특성, 대표 영웅, 메모를 관리합니다."
+        title="팩션 관리"
       />
 
       <div className="flex gap-2 overflow-x-auto pb-1">
         {data.races.map((candidate) => (
           <button
-            className={`shrink-0 rounded-md border px-3 py-2 text-sm font-semibold ${
-              candidate.id === race.id ? 'border-cyan bg-cyan/15 text-cyan' : 'border-line bg-panel text-muted'
+            className={`min-h-11 shrink-0 rounded-md border px-4 py-2 text-sm font-semibold ${
+              candidate.id === faction.id ? 'border-cyan bg-cyan/15 text-cyan' : 'border-line bg-panel text-muted'
             }`}
             key={candidate.id}
             onClick={() => setSelectedId(candidate.id)}
@@ -107,30 +107,30 @@ export function RacesPage({ data, setData }: RacesPageProps) {
       </div>
 
       <section className="panel space-y-3">
-        <TextField label="이름" onChange={(name) => updateRace({ name })} value={race.name} />
-        <TextField label="컨셉" onChange={(concept) => updateRace({ concept })} value={race.concept} />
+        <TextField label="팩션명" onChange={(name) => updateFaction({ name })} value={faction.name} />
+        <TextField label="팩션 컨셉" onChange={(concept) => updateFaction({ concept })} value={faction.concept} />
         <TextField
-          label="설명"
+          label="팩션 설명"
           multiline
-          onChange={(description) => updateRace({ description })}
-          value={race.description}
+          onChange={(description) => updateFaction({ description })}
+          value={faction.description}
         />
 
         <label className="block">
-          <span className="label">종족 특성</span>
+          <span className="label">팩션 특성</span>
           <div className="grid gap-2">
             {data.traits.map((trait) => {
-              const checked = race.traitIds.includes(trait.id);
+              const checked = faction.traitIds.includes(trait.id);
               return (
                 <label className="flex items-start gap-2 rounded-md border border-line bg-[#0f141d] p-3" key={trait.id}>
                   <input
                     checked={checked}
                     className="mt-1"
                     onChange={() =>
-                      updateRace({
+                      updateFaction({
                         traitIds: checked
-                          ? race.traitIds.filter((id) => id !== trait.id)
-                          : [...race.traitIds, trait.id],
+                          ? faction.traitIds.filter((id) => id !== trait.id)
+                          : [...faction.traitIds, trait.id],
                       })
                     }
                     type="checkbox"
@@ -146,10 +146,14 @@ export function RacesPage({ data, setData }: RacesPageProps) {
         </label>
 
         <label className="block">
-          <span className="label">영웅 유닛</span>
-          <select className="field" onChange={(event) => updateRace({ heroUnitId: event.target.value })} value={race.heroUnitId}>
+          <span className="label">대표 영웅 유닛</span>
+          <select
+            className="field"
+            onChange={(event) => updateFaction({ heroUnitId: event.target.value })}
+            value={faction.heroUnitId}
+          >
             <option value="">없음</option>
-            {raceUnits.map((unit) => (
+            {factionUnits.map((unit) => (
               <option key={unit.id} value={unit.id}>
                 {unit.name}
               </option>
@@ -160,21 +164,21 @@ export function RacesPage({ data, setData }: RacesPageProps) {
         <div>
           <span className="label">소속 유닛</span>
           <div className="flex flex-wrap gap-2">
-            {raceUnits.map((unit) => (
+            {factionUnits.map((unit) => (
               <span className="chip" key={unit.id}>
-                {unit.isHero ? '★ ' : ''}
+                {unit.isHero ? 'HERO ' : ''}
                 {unit.name}
               </span>
             ))}
-            {raceUnits.length === 0 ? <span className="text-sm text-muted">아직 유닛이 없습니다.</span> : null}
+            {factionUnits.length === 0 ? <span className="text-sm text-muted">아직 유닛이 없습니다.</span> : null}
           </div>
         </div>
 
-        <TextField label="메모" multiline onChange={(notes) => updateRace({ notes })} value={race.notes} />
+        <TextField label="팩션 메모" multiline onChange={(notes) => updateFaction({ notes })} value={faction.notes} />
 
-        <button className="btn btn-danger w-full" onClick={deleteRace} type="button">
+        <button className="btn btn-danger w-full" onClick={deleteFaction} type="button">
           <Trash2 size={16} />
-          종족 삭제
+          팩션 삭제
         </button>
       </section>
     </div>
