@@ -150,6 +150,8 @@ function AnalysisReport({ analysis }: { analysis: NonNullable<AppData['lastResul
           label="첫 교전"
           value={typeof analysis.firstEngagementTime === 'number' ? `${analysis.firstEngagementTime}초` : '없음'}
         />
+        <Metric label="이동 횟수" value={analysis.totalMoveCount ?? 0} />
+        <Metric label="평균 이동" value={`${analysis.averageMoveDistance ?? 0}칸`} />
         <Metric
           label="상성 이득 1위"
           value={

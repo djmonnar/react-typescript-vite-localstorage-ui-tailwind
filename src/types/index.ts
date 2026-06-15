@@ -211,9 +211,16 @@ export interface CostEfficiency {
   efficiency: number;
 }
 
+export interface GridTile {
+  x: number;
+  y: number;
+}
+
 export interface BattleAnalysis {
   winnerName: string;
   firstEngagementTime?: number;
+  totalMoveCount?: number;
+  averageMoveDistance?: number;
   topDamageUnit?: UnitDamage;
   damageShares: DamageShare[];
   survivalRatios: SurvivalRatio[];
@@ -237,6 +244,10 @@ export interface BattleReplayUnit {
   defenseType: Id;
   attackTypeName?: string;
   defenseTypeName?: string;
+  stackCount?: number;
+  hpPerUnit?: number;
+  maxStackHp?: number;
+  initialTile?: GridTile;
   initialPosition: number;
 }
 
@@ -253,10 +264,12 @@ export interface BattleReplayAttackEvent extends BattleReplayBaseEvent {
   attackerName: string;
   attackerTeam?: 'A' | 'B';
   attackerPosition?: number;
+  attackerTile?: GridTile;
   defenderId?: Id;
   defenderName?: string;
   defenderTeam?: 'A' | 'B';
   defenderPosition?: number;
+  defenderTile?: GridTile;
   damage: number;
   shieldDamage: number;
   hpDamage: number;
@@ -280,6 +293,8 @@ export interface BattleReplayMoveEvent extends BattleReplayBaseEvent {
   team: 'A' | 'B';
   fromPosition: number;
   toPosition: number;
+  fromTile?: GridTile;
+  toTile?: GridTile;
 }
 
 export interface BattleReplaySkillEvent extends BattleReplayBaseEvent {
@@ -287,10 +302,12 @@ export interface BattleReplaySkillEvent extends BattleReplayBaseEvent {
   casterId: Id;
   casterName: string;
   casterTeam: 'A' | 'B';
+  casterTile?: GridTile;
   skillId: Id;
   skillName: string;
   targetIds: Id[];
   targetNames: string[];
+  targetTiles?: Record<Id, GridTile>;
   effectType: SkillEffectType;
   value: number;
   valueType?: Skill['valueType'];
@@ -327,6 +344,8 @@ export interface BattleReplay {
   factionBName: string;
   duration: number;
   battlefieldLength?: number;
+  gridWidth?: number;
+  gridHeight?: number;
   units: BattleReplayUnit[];
   events: BattleReplayEvent[];
 }

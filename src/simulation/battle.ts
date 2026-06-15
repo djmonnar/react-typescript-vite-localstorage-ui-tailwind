@@ -1,4 +1,5 @@
 import type {
+  ActiveBuff,
   AppData,
   ArmyEntry,
   BattleAnalysis,
@@ -6,14 +7,14 @@ import type {
   BattleReplay,
   BattleReplayEvent,
   BattleReplaySkillEvent,
+  BattleResult,
   CostEfficiency,
+  GridTile,
   SimulationSummary,
   Skill,
   SkillStat,
   TypeAdvantageReport,
   UnitDamage,
-  BattleResult,
-  ActiveBuff,
 } from '../types';
 import { getEffectiveUnit, type EffectiveUnit } from './applyTraits';
 
@@ -27,13 +28,18 @@ interface Combatant {
   mp: number;
   maxHp: number;
   maxMp: number;
-  position: number;
+  hpPerUnit: number;
+  stackCount: number;
+  initialStackCount: number;
+  tile: GridTile;
   lastMoveLogAt: number;
   nextAttackAt: number;
   skillCooldowns: Record<string, number>;
   skillActivations: Record<string, number>;
   buffs: ActiveBuff[];
   damageDone: number;
+  moveCount: number;
+  tilesMoved: number;
 }
 
 interface DamageResult {
@@ -59,11 +65,10 @@ interface SkillContext {
 }
 
 const MAX_TIME = 300;
-const BATTLEFIELD_LENGTH = 70;
+const GRID_WIDTH = 8;
+const GRID_HEIGHT = 5;
 const TICK_DURATION = 0.25;
 const MOVE_EVENT_INTERVAL = 0.5;
-const RANGE_SCALE = 5;
-const MOVE_SPEED_SCALE = 1.45;
 
 function matrixMultiplier(data: AppData, attackTypeId: string, defenseTypeId: string): number {
   return (
@@ -87,15 +92,15 @@ function applyBuffValue(base: number, buffs: ActiveBuff[], effectType: ActiveBuf
 }
 
 function currentAttack(combatant: Combatant): number {
-  return applyBuffValue(combatant.unit.effectiveAttack, combatant.buffs, 'attackBuff');
+  return applyBuffValue(combatant.unit.effectiveAttack, combatant.buffs, 'attackBuff') * Math.max(1, combatant.stackCount);
 }
 
 function currentDefense(combatant: Combatant): number {
   return applyBuffValue(combatant.unit.effectiveDefense, combatant.buffs, 'defenseBuff');
 }
 
-function currentMoveSpeed(combatant: Combatant): number {
-  return Math.max(0, applyBuffValue(combatant.unit.effectiveMoveSpeed, combatant.buffs, 'moveSpeedBuff'));
+function movePower(combatant: Combatant): number {
+  return Math.max(1, Math.min(4, Math.round(applyBuffValue(combatant.unit.effectiveMoveSpeed, combatant.buffs, 'moveSpeedBuff'))));
 }
 
 function currentAttackSpeed(combatant: Combatant): number {
@@ -113,97 +118,181 @@ function expireBuffs(combatants: Combatant[], time: number) {
 }
 
 function alive(combatants: Combatant[], team?: 'A' | 'B') {
-  return combatants.filter((combatant) => combatant.hp > 0 && (!team || combatant.team === team));
+  return combatants.filter((combatant) => combatant.hp > 0 && combatant.stackCount > 0 && (!team || combatant.team === team));
+}
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function clampPosition(value: number): number {
-  return Math.max(0, Math.min(BATTLEFIELD_LENGTH, round2(value)));
+function tileKey(tile: GridTile): string {
+  return `${tile.x}:${tile.y}`;
 }
 
-function startingPosition(team: 'A' | 'B', unit: EffectiveUnit, order: number): number {
-  const laneOffset = (order % 6) * 1.05;
-  const heroOffset = (order % 3) * 0.55;
+function sameTile(left: GridTile, right: GridTile): boolean {
+  return left.x === right.x && left.y === right.y;
+}
 
-  if (team === 'A') {
-    return clampPosition(unit.isHero ? 4 + heroOffset : 6 + laneOffset);
-  }
+function inBounds(tile: GridTile): boolean {
+  return tile.x >= 0 && tile.x < GRID_WIDTH && tile.y >= 0 && tile.y < GRID_HEIGHT;
+}
 
-  return clampPosition(unit.isHero ? BATTLEFIELD_LENGTH - 4 - heroOffset : BATTLEFIELD_LENGTH - 6 - laneOffset);
+function tileDistance(left: GridTile, right: GridTile): number {
+  return Math.abs(left.x - right.x) + Math.abs(left.y - right.y);
+}
+
+function attackRange(unit: EffectiveUnit): number {
+  return Math.max(1, Math.round(unit.range));
+}
+
+function occupiedTiles(combatants: Combatant[], exceptId?: string): Set<string> {
+  return new Set(alive(combatants).filter((combatant) => combatant.id !== exceptId).map((combatant) => tileKey(combatant.tile)));
+}
+
+function startTiles(team: 'A' | 'B'): GridTile[] {
+  const columns = team === 'A' ? [0, 1] : [GRID_WIDTH - 1, GRID_WIDTH - 2];
+  return columns.flatMap((x) => Array.from({ length: GRID_HEIGHT }, (_, y) => ({ x, y })));
+}
+
+function fallbackTile(team: 'A' | 'B', order: number): GridTile {
+  const x = team === 'A' ? Math.min(1, Math.floor(order / GRID_HEIGHT)) : Math.max(GRID_WIDTH - 2, GRID_WIDTH - 1 - Math.floor(order / GRID_HEIGHT));
+  return { x, y: order % GRID_HEIGHT };
+}
+
+function findStartTile(team: 'A' | 'B', order: number, occupied: Set<string>): GridTile {
+  const starts = startTiles(team);
+  const preferred = starts[order % starts.length];
+  const ordered = [preferred, ...starts.filter((tile) => !sameTile(tile, preferred))];
+  return ordered.find((tile) => !occupied.has(tileKey(tile))) ?? fallbackTile(team, order);
 }
 
 function expandArmy(data: AppData, entries: ArmyEntry[], team: 'A' | 'B'): Combatant[] {
   const result: Combatant[] = [];
+  const occupied = new Set<string>();
   let order = 0;
-  for (const entry of entries) {
+
+  for (const entry of entries.filter((candidate) => candidate.count > 0)) {
     const unit = data.units.find((candidate) => candidate.id === entry.unitId);
     if (!unit) continue;
     const race = data.races.find((candidate) => candidate.id === unit.raceId);
     const effective = getEffectiveUnit(unit, race, data);
-    for (let index = 0; index < entry.count; index += 1) {
-      result.push({
-        id: `${team}_${unit.id}_${index}_${order}`,
-        team,
-        order,
-        unit: effective,
-        hp: effective.effectiveHp,
-        shield: effective.effectiveShield,
-        mp: effective.mp,
-        maxHp: effective.effectiveHp,
-        maxMp: effective.mp,
-        position: startingPosition(team, effective, order),
-        lastMoveLogAt: -MOVE_EVENT_INTERVAL,
-        nextAttackAt: Number((Math.random() * cooldown(effective)).toFixed(2)),
-        skillCooldowns: {},
-        skillActivations: {},
-        buffs: [],
-        damageDone: 0,
-      });
-      order += 1;
-    }
+    const tile = findStartTile(team, order, occupied);
+    occupied.add(tileKey(tile));
+    const hpPerUnit = Math.max(1, effective.effectiveHp);
+    const stackCount = Math.max(1, Math.round(entry.count));
+    result.push({
+      id: `${team}_${unit.id}_${order}`,
+      team,
+      order,
+      unit: effective,
+      hp: hpPerUnit * stackCount,
+      shield: Math.max(0, effective.effectiveShield * stackCount),
+      mp: effective.mp,
+      maxHp: hpPerUnit * stackCount,
+      maxMp: effective.mp,
+      hpPerUnit,
+      stackCount,
+      initialStackCount: stackCount,
+      tile,
+      lastMoveLogAt: -MOVE_EVENT_INTERVAL,
+      nextAttackAt: Number((Math.random() * cooldown(effective)).toFixed(2)),
+      skillCooldowns: {},
+      skillActivations: {},
+      buffs: [],
+      damageDone: 0,
+      moveCount: 0,
+      tilesMoved: 0,
+    });
+    order += 1;
   }
+
   return result;
 }
 
-function attackRange(unit: EffectiveUnit): number {
-  return Math.max(1, unit.range) * RANGE_SCALE;
-}
-
-function distance(left: Combatant, right: Combatant): number {
-  return Math.abs(left.position - right.position);
+function updateStackCount(combatant: Combatant) {
+  combatant.stackCount = combatant.hp > 0 ? Math.max(1, Math.ceil(combatant.hp / combatant.hpPerUnit)) : 0;
 }
 
 function selectClosest(attacker: Combatant, enemies: Combatant[]): Combatant {
-  return [...enemies].sort((left, right) => distance(attacker, left) - distance(attacker, right))[0];
+  return [...enemies].sort((left, right) => tileDistance(attacker.tile, left.tile) - tileDistance(attacker.tile, right.tile))[0];
 }
 
 function selectTargetInRange(attacker: Combatant, enemies: Combatant[]): Combatant | undefined {
   const range = attackRange(attacker.unit);
-  const inRange = enemies.filter((enemy) => distance(attacker, enemy) <= range);
+  const inRange = enemies.filter((enemy) => tileDistance(attacker.tile, enemy.tile) <= range);
   if (inRange.length === 0) return undefined;
 
   return [...inRange].sort((left, right) => {
-    const distanceDelta = distance(attacker, left) - distance(attacker, right);
-    if (attacker.unit.range <= 1 || Math.abs(distanceDelta) > RANGE_SCALE) return distanceDelta;
+    const distanceDelta = tileDistance(attacker.tile, left.tile) - tileDistance(attacker.tile, right.tile);
+    if (attacker.unit.range <= 1 || distanceDelta !== 0) return distanceDelta;
     return left.hp + left.shield - (right.hp + right.shield);
   })[0];
 }
 
-function moveToward(attacker: Combatant, target: Combatant): { fromPosition: number; toPosition: number } {
-  const fromPosition = attacker.position;
-  const gapToRange = Math.max(0, distance(attacker, target) - attackRange(attacker.unit));
-  const movement = Math.min(currentMoveSpeed(attacker) * TICK_DURATION * MOVE_SPEED_SCALE, gapToRange);
-  const direction = target.position > attacker.position ? 1 : -1;
+function neighbors(tile: GridTile): GridTile[] {
+  return [
+    { x: tile.x + 1, y: tile.y },
+    { x: tile.x - 1, y: tile.y },
+    { x: tile.x, y: tile.y + 1 },
+    { x: tile.x, y: tile.y - 1 },
+  ].filter(inBounds);
+}
 
-  attacker.position = clampPosition(attacker.position + direction * movement);
-  return { fromPosition, toPosition: attacker.position };
+function reachableTiles(start: GridTile, maxSteps: number, occupied: Set<string>): Array<{ tile: GridTile; steps: number }> {
+  const queue: Array<{ tile: GridTile; steps: number }> = [{ tile: start, steps: 0 }];
+  const visited = new Set([tileKey(start)]);
+  const result: Array<{ tile: GridTile; steps: number }> = [{ tile: start, steps: 0 }];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || current.steps >= maxSteps) continue;
+
+    for (const next of neighbors(current.tile)) {
+      const key = tileKey(next);
+      if (visited.has(key) || occupied.has(key)) continue;
+      visited.add(key);
+      const entry = { tile: next, steps: current.steps + 1 };
+      queue.push(entry);
+      result.push(entry);
+    }
+  }
+
+  return result;
+}
+
+function chooseMoveTile(attacker: Combatant, target: Combatant, combatants: Combatant[]): { fromTile: GridTile; toTile: GridTile; steps: number } {
+  const fromTile = attacker.tile;
+  const occupied = occupiedTiles(combatants, attacker.id);
+  const reachable = reachableTiles(attacker.tile, movePower(attacker), occupied);
+  const currentDistance = tileDistance(attacker.tile, target.tile);
+  const best = [...reachable]
+    .filter((entry) => entry.steps > 0)
+    .sort((left, right) => {
+      const distanceDelta = tileDistance(left.tile, target.tile) - tileDistance(right.tile, target.tile);
+      if (distanceDelta !== 0) return distanceDelta;
+      const forwardDelta =
+        attacker.team === 'A' ? right.tile.x - left.tile.x : left.tile.x - right.tile.x;
+      if (forwardDelta !== 0) return forwardDelta;
+      return left.steps - right.steps;
+    })[0];
+
+  if (!best || tileDistance(best.tile, target.tile) >= currentDistance) return { fromTile, toTile: fromTile, steps: 0 };
+  attacker.tile = best.tile;
+  attacker.moveCount += 1;
+  attacker.tilesMoved += best.steps;
+  return { fromTile, toTile: best.tile, steps: best.steps };
 }
 
 function attackTypeName(data: AppData, attackTypeId: string): string {
   return data.attackTypes.find((type) => type.id === attackTypeId)?.name ?? attackTypeId;
+}
+
+function defenseTypeName(data: AppData, defenseTypeId: string): string {
+  return data.defenseTypes.find((type) => type.id === defenseTypeId)?.name ?? defenseTypeId;
 }
 
 function applyDamage(attacker: Combatant, defender: Combatant, data: AppData): DamageResult {
@@ -223,6 +312,7 @@ function applyDamage(attacker: Combatant, defender: Combatant, data: AppData): D
     defender.hp = Math.max(0, defender.hp - remaining);
   }
 
+  updateStackCount(defender);
   attacker.damageDone += finalDamage;
   return { damage: finalDamage, bonusDamage, multiplier };
 }
@@ -253,7 +343,7 @@ function getSkillTargets(
   if (skill.target === 'enemyTarget') return currentTarget && currentTarget.hp > 0 ? [currentTarget] : [];
   if (skill.target === 'enemyLowestHp') return [...enemies].sort((left, right) => hpRatio(left) - hpRatio(right)).slice(0, 1);
   if (skill.target === 'allEnemies') return enemies;
-  if (skill.target === 'enemiesInRange') return enemies.filter((enemy) => distance(caster, enemy) <= attackRange(caster.unit));
+  if (skill.target === 'enemiesInRange') return enemies.filter((enemy) => tileDistance(caster.tile, enemy.tile) <= attackRange(caster.unit));
 
   return [];
 }
@@ -261,16 +351,7 @@ function getSkillTargets(
 function ensureSkillStat(stats: Map<string, SkillStat>, skill: Skill): SkillStat {
   const previous = stats.get(skill.id);
   if (previous) return previous;
-
-  const next: SkillStat = {
-    skillId: skill.id,
-    skillName: skill.name,
-    activations: 0,
-    damage: 0,
-    healing: 0,
-    shield: 0,
-    buffActivations: 0,
-  };
+  const next: SkillStat = { skillId: skill.id, skillName: skill.name, activations: 0, damage: 0, healing: 0, shield: 0, buffActivations: 0 };
   stats.set(skill.id, next);
   return next;
 }
@@ -296,10 +377,9 @@ function applySkillDamage(caster: Combatant, target: Combatant, skill: Skill, da
     target.shield -= shieldDamage;
     remaining -= shieldDamage;
   }
-  if (remaining > 0) {
-    target.hp = Math.max(0, target.hp - remaining);
-  }
+  if (remaining > 0) target.hp = Math.max(0, target.hp - remaining);
 
+  updateStackCount(target);
   caster.damageDone += finalDamage;
   return finalDamage;
 }
@@ -326,6 +406,7 @@ function activateSkill(
   let totalApplied = 0;
   const targetHpAfter: Record<string, number> = {};
   const targetShieldAfter: Record<string, number> = {};
+  const targetTiles: Record<string, GridTile> = {};
 
   for (const target of targets) {
     if (skill.effectType === 'damage') {
@@ -337,6 +418,7 @@ function activateSkill(
     if (skill.effectType === 'heal') {
       const amount = Math.min(target.maxHp - target.hp, Math.round(skillValue(skill, caster, target)));
       target.hp += Math.max(0, amount);
+      updateStackCount(target);
       totalApplied += Math.max(0, amount);
       stat.healing += Math.max(0, amount);
     }
@@ -368,6 +450,7 @@ function activateSkill(
 
     targetHpAfter[target.id] = target.hp;
     targetShieldAfter[target.id] = target.shield;
+    targetTiles[target.id] = target.tile;
   }
 
   if (context.recordReplay) {
@@ -379,10 +462,12 @@ function activateSkill(
       casterId: caster.id,
       casterName: caster.unit.name,
       casterTeam: caster.team,
+      casterTile: caster.tile,
       skillId: skill.id,
       skillName: skill.name,
       targetIds: targets.map((target) => target.id),
       targetNames: targets.map((target) => target.unit.name),
+      targetTiles,
       effectType: skill.effectType,
       value: skill.value,
       valueType: skill.valueType,
@@ -394,15 +479,12 @@ function activateSkill(
     context.replayEvents.push(event);
   }
 
-  if (context.keepFullLog) {
-    logsSkill(context.logs, time, caster, skill, targets, totalApplied);
-  }
-
+  if (context.keepFullLog) logsSkill(context.logs, time, caster, skill, targets, totalApplied);
   return true;
 }
 
 function logsSkill(logs: string[], time: number, caster: Combatant, skill: Skill, targets: Combatant[], totalApplied: number) {
-  const targetLabel = targets.length === 1 ? targets[0].unit.name : `${targets.length} targets`;
+  const targetLabel = targets.length === 1 ? targets[0].unit.name : `${targets.length}개 대상`;
   logs.push(
     `[${time.toFixed(2).padStart(6, '0')}] SKILL: ${caster.team}:${caster.unit.name} used ${skill.name} -> ${targetLabel} ${skill.effectType} ${totalApplied}`,
   );
@@ -425,39 +507,18 @@ function triggerSkills(
 }
 
 function aggregateDamage(combatants: Combatant[]): UnitDamage[] {
-  const totals = new Map<string, UnitDamage>();
-  for (const combatant of combatants) {
-    const previous = totals.get(combatant.unit.id);
-    if (previous) {
-      previous.damage += combatant.damageDone;
-    } else {
-      totals.set(combatant.unit.id, {
-        unitId: combatant.unit.id,
-        name: combatant.unit.name,
-        damage: combatant.damageDone,
-      });
-    }
-  }
-  return [...totals.values()].sort((left, right) => right.damage - left.damage);
+  return combatants
+    .map((combatant) => ({ unitId: combatant.unit.id, name: combatant.unit.name, damage: Math.round(combatant.damageDone) }))
+    .sort((left, right) => right.damage - left.damage);
 }
 
 function aggregateRemaining(combatants: Combatant[]): BattleResult['remainingUnits'] {
-  const totals = new Map<string, BattleResult['remainingUnits'][number]>();
-  for (const combatant of alive(combatants)) {
-    const key = `${combatant.team}:${combatant.unit.id}`;
-    const previous = totals.get(key);
-    if (previous) {
-      previous.count += 1;
-    } else {
-      totals.set(key, {
-        unitId: combatant.unit.id,
-        name: combatant.unit.name,
-        team: combatant.team,
-        count: 1,
-      });
-    }
-  }
-  return [...totals.values()];
+  return alive(combatants).map((combatant) => ({
+    unitId: combatant.unit.id,
+    name: combatant.unit.name,
+    team: combatant.team,
+    count: combatant.stackCount,
+  }));
 }
 
 function collectArmyStats(combatants: Combatant[]): ArmyStats {
@@ -467,17 +528,13 @@ function collectArmyStats(combatants: Combatant[]): ArmyStats {
   let initialB = 0;
 
   for (const combatant of combatants) {
-    if (combatant.team === 'A') initialA += 1;
-    if (combatant.team === 'B') initialB += 1;
-    unitCounts.set(combatant.unit.id, (unitCounts.get(combatant.unit.id) ?? 0) + 1);
+    if (combatant.team === 'A') initialA += combatant.initialStackCount;
+    if (combatant.team === 'B') initialB += combatant.initialStackCount;
+    unitCounts.set(combatant.unit.id, (unitCounts.get(combatant.unit.id) ?? 0) + combatant.initialStackCount);
     unitCosts.set(combatant.unit.id, combatant.unit.cost);
   }
 
   return { initialA, initialB, unitCounts, unitCosts };
-}
-
-function defenseTypeName(data: AppData, defenseTypeId: string): string {
-  return data.defenseTypes.find((type) => type.id === defenseTypeId)?.name ?? defenseTypeId;
 }
 
 function buildReplayUnits(combatants: Combatant[], data: AppData): BattleReplay['units'] {
@@ -488,18 +545,18 @@ function buildReplayUnits(combatants: Combatant[], data: AppData): BattleReplay[
     role: combatant.unit.role,
     team: combatant.team,
     isHero: combatant.unit.isHero,
-    maxHp: combatant.unit.effectiveHp,
-    maxShield: combatant.unit.effectiveShield,
+    maxHp: combatant.maxHp,
+    maxShield: combatant.shield,
     attackType: combatant.unit.attackType,
     defenseType: combatant.unit.defenseType,
     attackTypeName: attackTypeName(data, combatant.unit.attackType),
     defenseTypeName: defenseTypeName(data, combatant.unit.defenseType),
-    initialPosition: combatant.position,
+    stackCount: combatant.initialStackCount,
+    hpPerUnit: combatant.hpPerUnit,
+    maxStackHp: combatant.maxHp,
+    initialTile: combatant.tile,
+    initialPosition: combatant.tile.x,
   }));
-}
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
 }
 
 function topDamageShare(totalDamageByUnit: UnitDamage[]) {
@@ -512,11 +569,7 @@ function topDamageShare(totalDamageByUnit: UnitDamage[]) {
 
 function aggregateTypeAdvantages(typeAdvantages: Map<string, TypeAdvantageReport>): TypeAdvantageReport[] {
   return [...typeAdvantages.values()]
-    .map((entry) => ({
-      ...entry,
-      bonusDamage: Math.round(entry.bonusDamage),
-      totalDamage: Math.round(entry.totalDamage),
-    }))
+    .map((entry) => ({ ...entry, bonusDamage: Math.round(entry.bonusDamage), totalDamage: Math.round(entry.totalDamage) }))
     .sort((left, right) => right.bonusDamage - left.bonusDamage);
 }
 
@@ -542,7 +595,6 @@ function buildSkillAnalysis(skillStats: Map<string, SkillStat>) {
   const totalShield = stats.reduce((sum, entry) => sum + entry.shield, 0);
   const totalBuffActivations = stats.reduce((sum, entry) => sum + entry.buffActivations, 0);
   const summary: string[] = [];
-
   const topHealing = [...stats].sort((left, right) => right.healing - left.healing)[0];
   const topShield = [...stats].sort((left, right) => right.shield - left.shield)[0];
   const topDamage = [...stats].sort((left, right) => right.damage - left.damage)[0];
@@ -597,21 +649,17 @@ function buildBalanceSuggestions(params: {
   }
 
   if (typeof params.firstEngagementTime === 'number' && params.firstEngagementTime >= 8) {
-    suggestions.push(`첫 교전까지 ${params.firstEngagementTime}초가 걸렸습니다. 전장 길이 또는 이동속도를 조정해보세요.`);
+    suggestions.push(`첫 교전까지 ${params.firstEngagementTime}초가 걸렸습니다. 전장 크기 또는 이동속도를 조정해보세요.`);
   }
-
   if (winnerSurvival && winnerSurvival.ratioPercent >= 45) {
     suggestions.push(`${winnerSurvival.factionName} 생존율이 ${winnerSurvival.ratioPercent}%입니다. 압승을 줄이려면 해당 팩션의 방어력/보호막 또는 유닛 수를 낮춰보세요.`);
   }
-
   if (topShare && topShare.sharePercent >= 45) {
     suggestions.push(`${topShare.name} 피해 비중이 ${topShare.sharePercent}%로 높습니다. 공격력, 공격속도, 사거리 중 하나를 낮추거나 비용을 올리는 조정이 적합합니다.`);
   }
-
   if (params.topAdvantagedAttackType && params.topAdvantagedAttackType.bonusDamage > 0) {
     suggestions.push(`${params.topAdvantagedAttackType.attackTypeName} 타입이 상성으로 +${params.topAdvantagedAttackType.bonusDamage} 피해를 얻었습니다. 해당 타입 배율이 의도보다 강한지 확인하세요.`);
   }
-
   if (topEfficiency && topEfficiency.totalCost > 0 && topEfficiency.efficiency >= 1.5) {
     suggestions.push(`${topEfficiency.name}의 가격 대비 효율이 ${topEfficiency.efficiency}입니다. 비용 증가 또는 생산속도 증가로 효율을 맞출 수 있습니다.`);
   }
@@ -629,15 +677,13 @@ function buildAnalysis(params: {
   typeAdvantages: Map<string, TypeAdvantageReport>;
   skillStats: Map<string, SkillStat>;
   firstEngagementTime?: number;
+  totalMoveCount: number;
+  totalTilesMoved: number;
   winRateA: number;
   winRateB: number;
 }): BattleAnalysis {
-  const remainingA = params.remainingUnits
-    .filter((entry) => entry.team === 'A')
-    .reduce((sum, entry) => sum + entry.count, 0);
-  const remainingB = params.remainingUnits
-    .filter((entry) => entry.team === 'B')
-    .reduce((sum, entry) => sum + entry.count, 0);
+  const remainingA = params.remainingUnits.filter((entry) => entry.team === 'A').reduce((sum, entry) => sum + entry.count, 0);
+  const remainingB = params.remainingUnits.filter((entry) => entry.team === 'B').reduce((sum, entry) => sum + entry.count, 0);
   const damageShares = topDamageShare(params.totalDamageByUnit);
   const survivalRatios = [
     {
@@ -657,12 +703,13 @@ function buildAnalysis(params: {
   ];
   const typeAdvantages = aggregateTypeAdvantages(params.typeAdvantages);
   const costEfficiency = buildCostEfficiency(params.totalDamageByUnit, params.armyStats);
-  const winnerName =
-    params.winner === 'A' ? params.factionAName : params.winner === 'B' ? params.factionBName : '무승부';
+  const winnerName = params.winner === 'A' ? params.factionAName : params.winner === 'B' ? params.factionBName : '무승부';
 
   return {
     winnerName,
     firstEngagementTime: params.firstEngagementTime,
+    totalMoveCount: params.totalMoveCount,
+    averageMoveDistance: params.totalMoveCount > 0 ? round1(params.totalTilesMoved / params.totalMoveCount) : 0,
     topDamageUnit: params.totalDamageByUnit[0],
     damageShares,
     survivalRatios,
@@ -703,6 +750,8 @@ function mergeManyAnalysis(results: BattleResult[], aggregate: {
   const skillTotals = new Map<string, SkillStat>();
   let firstEngagementTotal = 0;
   let firstEngagementCount = 0;
+  let totalMoveCount = 0;
+  let totalTilesMoved = 0;
 
   for (const result of results) {
     for (const typeAdvantage of result.analysis?.typeAdvantages ?? []) {
@@ -715,16 +764,11 @@ function mergeManyAnalysis(results: BattleResult[], aggregate: {
         typeTotals.set(typeAdvantage.attackTypeId, { ...typeAdvantage });
       }
     }
-
     for (const efficiency of result.analysis?.costEfficiency ?? []) {
       const previous = costTotals.get(efficiency.unitId);
-      if (previous) {
-        previous.damage += efficiency.damage;
-      } else {
-        costTotals.set(efficiency.unitId, { ...efficiency });
-      }
+      if (previous) previous.damage += efficiency.damage;
+      else costTotals.set(efficiency.unitId, { ...efficiency });
     }
-
     for (const skill of result.analysis?.skillStats?.skillStats ?? []) {
       const previous = skillTotals.get(skill.skillId);
       if (previous) {
@@ -737,51 +781,27 @@ function mergeManyAnalysis(results: BattleResult[], aggregate: {
         skillTotals.set(skill.skillId, { ...skill });
       }
     }
-
     if (typeof result.analysis?.firstEngagementTime === 'number') {
       firstEngagementTotal += result.analysis.firstEngagementTime;
       firstEngagementCount += 1;
     }
+    totalMoveCount += result.analysis?.totalMoveCount ?? 0;
+    totalTilesMoved += (result.analysis?.averageMoveDistance ?? 0) * (result.analysis?.totalMoveCount ?? 0);
   }
 
   const typeAdvantages = [...typeTotals.values()]
-    .map((entry) => ({
-      ...entry,
-      bonusDamage: Math.round(entry.bonusDamage / results.length),
-      totalDamage: Math.round(entry.totalDamage / results.length),
-      hitCount: Math.round(entry.hitCount / results.length),
-    }))
+    .map((entry) => ({ ...entry, bonusDamage: Math.round(entry.bonusDamage / results.length), totalDamage: Math.round(entry.totalDamage / results.length), hitCount: Math.round(entry.hitCount / results.length) }))
     .sort((left, right) => right.bonusDamage - left.bonusDamage);
-
   const costEfficiency = [...costTotals.values()]
-    .map((entry) => ({
-      ...entry,
-      damage: Math.round(entry.damage / results.length),
-      efficiency: entry.totalCost > 0 ? round1(entry.damage / results.length / entry.totalCost) : entry.damage,
-    }))
+    .map((entry) => ({ ...entry, damage: Math.round(entry.damage / results.length), efficiency: entry.totalCost > 0 ? round1(entry.damage / results.length / entry.totalCost) : entry.damage }))
     .sort((left, right) => right.efficiency - left.efficiency);
-
   const damageShares = topDamageShare(aggregate.totalDamageByUnit);
   const survivalRatios = [
-    {
-      team: 'A' as const,
-      factionName: aggregate.factionAName,
-      initialCount: initialA,
-      remainingCount: round1(aggregate.averageRemainingA),
-      ratioPercent: initialA > 0 ? round1((aggregate.averageRemainingA / initialA) * 100) : 0,
-    },
-    {
-      team: 'B' as const,
-      factionName: aggregate.factionBName,
-      initialCount: initialB,
-      remainingCount: round1(aggregate.averageRemainingB),
-      ratioPercent: initialB > 0 ? round1((aggregate.averageRemainingB / initialB) * 100) : 0,
-    },
+    { team: 'A' as const, factionName: aggregate.factionAName, initialCount: initialA, remainingCount: round1(aggregate.averageRemainingA), ratioPercent: initialA > 0 ? round1((aggregate.averageRemainingA / initialA) * 100) : 0 },
+    { team: 'B' as const, factionName: aggregate.factionBName, initialCount: initialB, remainingCount: round1(aggregate.averageRemainingB), ratioPercent: initialB > 0 ? round1((aggregate.averageRemainingB / initialB) * 100) : 0 },
   ];
-  const winnerName =
-    aggregate.winner === 'A' ? aggregate.factionAName : aggregate.winner === 'B' ? aggregate.factionBName : '무승부';
+  const winnerName = aggregate.winner === 'A' ? aggregate.factionAName : aggregate.winner === 'B' ? aggregate.factionBName : '무승부';
   const firstEngagementTime = firstEngagementCount > 0 ? round2(firstEngagementTotal / firstEngagementCount) : undefined;
-
   const averageSkillStats = new Map(
     [...skillTotals.values()].map((entry) => [
       entry.skillId,
@@ -799,6 +819,8 @@ function mergeManyAnalysis(results: BattleResult[], aggregate: {
   return {
     winnerName,
     firstEngagementTime,
+    totalMoveCount: Math.round(totalMoveCount / results.length),
+    averageMoveDistance: totalMoveCount > 0 ? round1(totalTilesMoved / totalMoveCount) : 0,
     topDamageUnit: aggregate.totalDamageByUnit[0],
     damageShares,
     survivalRatios,
@@ -826,10 +848,7 @@ interface SimulateBattleOptions {
 }
 
 function normalizeBattleOptions(options: boolean | Partial<SimulateBattleOptions>): SimulateBattleOptions {
-  if (typeof options === 'boolean') {
-    return { keepFullLog: options, recordReplay: options };
-  }
-
+  if (typeof options === 'boolean') return { keepFullLog: options, recordReplay: options };
   return {
     keepFullLog: options.keepFullLog ?? true,
     recordReplay: options.recordReplay ?? options.keepFullLog ?? true,
@@ -850,14 +869,8 @@ export function simulateBattle(
   const replayEvents: BattleReplayEvent[] = [];
   const typeAdvantages = new Map<string, TypeAdvantageReport>();
   const skillStats = new Map<string, SkillStat>();
-  const logs: string[] = [`[00.00] SIM: ${preset.name} 교전 시작`];
-  const skillContext: SkillContext = {
-    replayEvents,
-    recordReplay,
-    logs,
-    keepFullLog,
-    stats: skillStats,
-  };
+  const logs: string[] = [`[00.00] SIM: ${preset.name} 전술 그리드 교전 시작`];
+  const skillContext: SkillContext = { replayEvents, recordReplay, logs, keepFullLog, stats: skillStats };
   let time = 0;
   let firstEngagementTime: number | undefined;
 
@@ -876,13 +889,13 @@ export function simulateBattle(
 
       const enemies = alive(combatants, actor.team === 'A' ? 'B' : 'A');
       if (enemies.length === 0) break;
-
       const targetInRange = selectTargetInRange(actor, enemies);
 
       if (targetInRange && time >= actor.nextAttackAt) {
         if (firstEngagementTime === undefined) firstEngagementTime = round2(time);
         const beforeShield = targetInRange.shield;
         const beforeHp = targetInRange.hp;
+        const beforeStack = targetInRange.stackCount;
         const damageResult = applyDamage(actor, targetInRange, data);
         const damage = damageResult.damage;
         const hpDelta = beforeHp - targetInRange.hp;
@@ -899,11 +912,13 @@ export function simulateBattle(
             attackerId: actor.id,
             attackerName: actor.unit.name,
             attackerTeam: actor.team,
-            attackerPosition: actor.position,
+            attackerPosition: actor.tile.x,
+            attackerTile: actor.tile,
             defenderId: targetInRange.id,
             defenderName: targetInRange.unit.name,
             defenderTeam: targetInRange.team,
-            defenderPosition: targetInRange.position,
+            defenderPosition: targetInRange.tile.x,
+            defenderTile: targetInRange.tile,
             targetId: targetInRange.id,
             targetName: targetInRange.unit.name,
             damage,
@@ -937,13 +952,10 @@ export function simulateBattle(
 
         if (keepFullLog) {
           logs.push(
-            `[${time.toFixed(2).padStart(6, '0')}] ${actor.team}:${actor.unit.name}@${actor.position.toFixed(1)} -> ${targetInRange.team}:${targetInRange.unit.name}@${targetInRange.position.toFixed(1)} DMG ${damage} x${damageResult.multiplier} (S-${shieldDelta}, HP-${hpDelta})`,
+            `[${time.toFixed(2).padStart(6, '0')}] ${actor.team}:${actor.unit.name}(${actor.tile.x},${actor.tile.y}) x${actor.stackCount} -> ${targetInRange.team}:${targetInRange.unit.name}(${targetInRange.tile.x},${targetInRange.tile.y}) x${beforeStack} DMG ${damage} x${damageResult.multiplier} (S-${shieldDelta}, HP-${hpDelta})`,
           );
         }
-
-        if (defeated) {
-          logs.push(`[${time.toFixed(2).padStart(6, '0')}] DOWN: ${targetInRange.team}:${targetInRange.unit.name}`);
-        }
+        if (defeated) logs.push(`[${time.toFixed(2).padStart(6, '0')}] DOWN: ${targetInRange.team}:${targetInRange.unit.name}`);
 
         triggerSkills(actor, 'onAttack', combatants, data, time, { ...skillContext, currentTarget: targetInRange });
         actor.nextAttackAt = round2(time + combatantCooldown(actor));
@@ -952,12 +964,8 @@ export function simulateBattle(
 
       if (!targetInRange) {
         const closestEnemy = selectClosest(actor, enemies);
-        const { fromPosition, toPosition } = moveToward(actor, closestEnemy);
-        if (
-          recordReplay &&
-          fromPosition !== toPosition &&
-          time - actor.lastMoveLogAt >= MOVE_EVENT_INTERVAL - 0.001
-        ) {
+        const { fromTile, toTile, steps } = chooseMoveTile(actor, closestEnemy, combatants);
+        if (recordReplay && steps > 0 && time - actor.lastMoveLogAt >= MOVE_EVENT_INTERVAL - 0.001) {
           replayEvents.push({
             id: `evt_${replayEvents.length}_${actor.id}_move`,
             index: replayEvents.length,
@@ -966,8 +974,10 @@ export function simulateBattle(
             unitId: actor.id,
             unitName: actor.unit.name,
             team: actor.team,
-            fromPosition,
-            toPosition,
+            fromPosition: fromTile.x,
+            toPosition: toTile.x,
+            fromTile,
+            toTile,
           });
           actor.lastMoveLogAt = time;
         }
@@ -977,13 +987,15 @@ export function simulateBattle(
     time = round2(time + TICK_DURATION);
   }
 
-  const aliveA = alive(combatants, 'A').length;
-  const aliveB = alive(combatants, 'B').length;
+  const aliveA = alive(combatants, 'A').reduce((sum, combatant) => sum + combatant.stackCount, 0);
+  const aliveB = alive(combatants, 'B').reduce((sum, combatant) => sum + combatant.stackCount, 0);
   const winner = aliveA === aliveB ? 'Draw' : aliveA > aliveB ? 'A' : 'B';
   const battleTime = Math.min(MAX_TIME, Number(time.toFixed(2)));
   const totalDamageByUnit = aggregateDamage(combatants);
   const mvpUnit = totalDamageByUnit[0]?.name ?? '없음';
   const remainingUnits = aggregateRemaining(combatants);
+  const totalMoveCount = combatants.reduce((sum, combatant) => sum + combatant.moveCount, 0);
+  const totalTilesMoved = combatants.reduce((sum, combatant) => sum + combatant.tilesMoved, 0);
   const analysis = buildAnalysis({
     winner,
     factionAName,
@@ -994,6 +1006,8 @@ export function simulateBattle(
     typeAdvantages,
     skillStats,
     firstEngagementTime,
+    totalMoveCount,
+    totalTilesMoved,
     winRateA: winner === 'A' ? 100 : 0,
     winRateB: winner === 'B' ? 100 : 0,
   });
@@ -1018,7 +1032,8 @@ export function simulateBattle(
             factionAName,
             factionBName,
             duration: battleTime,
-            battlefieldLength: BATTLEFIELD_LENGTH,
+            gridWidth: GRID_WIDTH,
+            gridHeight: GRID_HEIGHT,
             units: replayUnits,
             events: replayEvents,
           },
@@ -1047,11 +1062,8 @@ export function simulateMany(data: AppData, preset: BattlePreset, runs = 100): S
     }
     for (const damage of result.totalDamageByUnit) {
       const previous = damageTotals.get(damage.unitId);
-      if (previous) {
-        previous.damage += damage.damage;
-      } else {
-        damageTotals.set(damage.unitId, { ...damage });
-      }
+      if (previous) previous.damage += damage.damage;
+      else damageTotals.set(damage.unitId, { ...damage });
     }
   }
 
@@ -1087,6 +1099,7 @@ export function simulateMany(data: AppData, preset: BattlePreset, runs = 100): S
 
   return {
     ...representative,
+    replay: undefined,
     runs,
     winner,
     winRateA,
