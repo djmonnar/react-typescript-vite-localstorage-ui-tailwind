@@ -653,52 +653,109 @@ function SkillSection({
   onSaveSkillTemplate: (skill: Skill) => void;
   onUpdateSkill: (skillId: string, patch: Partial<Skill>) => void;
 }) {
+  const [addSource, setAddSource] = useState<'preset' | 'template' | 'blank'>('preset');
+  const canUseTemplate = skillTemplates.length > 0;
+  const addSourceOptions: Array<{ id: 'preset' | 'template' | 'blank'; label: string; description: string; disabled?: boolean }> = [
+    { id: 'preset', label: '추천 프리셋', description: '기본 제공 스킬을 복사해서 수정합니다.' },
+    { id: 'template', label: '내 공용 스킬', description: '세부설정에서 만든 공용 스킬을 복사합니다.', disabled: !canUseTemplate },
+    { id: 'blank', label: '빈 스킬', description: '처음부터 직접 만듭니다.' },
+  ];
+
+  const addSelectedSkill = () => {
+    if (addSource === 'template') {
+      onAddSkillTemplate();
+      return;
+    }
+    if (addSource === 'blank') {
+      onAddSkill();
+      return;
+    }
+    onAddSkillPreset();
+  };
+
   return (
     <div className="mt-4 space-y-3 rounded-md border border-line bg-[#0f141d] p-3">
       <div className="space-y-1">
         <h5 className="text-sm font-bold text-cyan">스킬</h5>
         <p className="text-xs text-muted">스킬은 특정 유닛이 전투 중 조건에 따라 사용하는 능력입니다.</p>
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto]">
-        <select
-          className="field"
-          onChange={(event) => setSelectedSkillPreset(event.target.value)}
-          value={selectedSkillPreset}
-        >
-          {skillPresets.map((preset) => (
-            <option key={preset.name} value={preset.name}>
-              {preset.name}
-            </option>
+
+      <div className="rounded-md border border-line bg-[#10151f] p-3">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-ink">스킬 추가</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted">
+              추천 프리셋과 내 공용 스킬은 모두 현재 유닛으로 복사한 뒤 자유롭게 수정됩니다.
+            </p>
+          </div>
+        </div>
+
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          {addSourceOptions.map((option) => (
+            <button
+              className={`min-h-12 rounded-md border px-2 py-2 text-xs font-bold ${
+                addSource === option.id
+                  ? 'border-cyan bg-cyan/15 text-cyan'
+                  : option.disabled
+                    ? 'border-line bg-[#0f141d] text-muted/50'
+                    : 'border-line bg-[#0f141d] text-muted'
+              }`}
+              disabled={option.disabled}
+              key={option.id}
+              onClick={() => setAddSource(option.id)}
+              type="button"
+            >
+              {option.label}
+            </button>
           ))}
-        </select>
-        <button className="btn btn-primary" onClick={onAddSkillPreset} type="button">
-          <Plus size={16} />
-          스킬 프리셋 추가
-        </button>
-        <button className="btn" onClick={onAddSkill} type="button">
-          <Plus size={16} />빈 스킬
-        </button>
+        </div>
+
+        <p className="mb-2 text-xs leading-relaxed text-muted">
+          {addSourceOptions.find((option) => option.id === addSource)?.description}
+        </p>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+          {addSource === 'preset' ? (
+            <select
+              className="field"
+              onChange={(event) => setSelectedSkillPreset(event.target.value)}
+              value={selectedSkillPreset}
+            >
+              {skillPresets.map((preset) => (
+                <option key={preset.name} value={preset.name}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {addSource === 'template' ? (
+            <select
+              className="field"
+              onChange={(event) => setSelectedSkillTemplateId(event.target.value)}
+              value={selectedSkillTemplateId}
+            >
+              {skillTemplates.map((skill) => (
+                <option key={skill.id} value={skill.id}>
+                  {skill.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {addSource === 'blank' ? (
+            <div className="rounded-md border border-line bg-[#0f141d] px-3 py-3 text-sm text-muted">
+              빈 스킬을 추가한 뒤 이름, 타이밍, 대상, 효과를 직접 설정합니다.
+            </div>
+          ) : null}
+          <button className="btn btn-primary" disabled={addSource === 'template' && !canUseTemplate} onClick={addSelectedSkill} type="button">
+            <Plus size={16} />
+            선택한 스킬 추가
+          </button>
+        </div>
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
-        <select
-          className="field"
-          onChange={(event) => setSelectedSkillTemplateId(event.target.value)}
-          value={selectedSkillTemplateId}
-        >
-          {skillTemplates.map((skill) => (
-            <option key={skill.id} value={skill.id}>
-              {skill.name}
-            </option>
-          ))}
-        </select>
-        <button className="btn btn-primary" disabled={skillTemplates.length === 0} onClick={onAddSkillTemplate} type="button">
-          <Plus size={16} />
-          공용 스킬에서 추가
-        </button>
-      </div>
+
       {skillTemplates.length > 0 ? (
         <div>
-          <span className="label">내가 만든 공용 스킬</span>
+          <span className="label">내 공용 스킬 바로 선택</span>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {skillTemplates.map((skill) => (
               <button

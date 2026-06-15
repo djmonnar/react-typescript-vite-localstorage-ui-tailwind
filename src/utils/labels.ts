@@ -245,7 +245,7 @@ export function formatSkillConditions(skill: Skill): string {
 }
 
 export function formatSkillShortLine(skill: Skill): string {
-  return `${skillTriggerLabels[skill.trigger]} / ${skillTargetLabels[skill.target]} / ${skillEffectLabels[skill.effectType]}`;
+  return `타이밍: ${skillTriggerLabels[skill.trigger]} · 대상: ${skillTargetLabels[skill.target]} · 효과: ${skillEffectLabels[skill.effectType]}`;
 }
 
 export function formatSkillEventSummary(event: BattleReplaySkillEvent): string {
