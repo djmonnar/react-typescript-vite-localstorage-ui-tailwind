@@ -9,6 +9,8 @@ export interface EffectiveUnit extends Unit {
 }
 
 function traitApplies(unit: Unit, trait: Trait): boolean {
+  if (trait.trigger && trait.trigger !== 'battleStart') return false;
+  if (trait.triggerV2 && trait.triggerV2 !== 'battleStart' && trait.triggerV2 !== 'always') return false;
   if (trait.targetFilter.attackTypeId && unit.attackType !== trait.targetFilter.attackTypeId) return false;
   if (trait.targetFilter.defenseTypeId && unit.defenseType !== trait.targetFilter.defenseTypeId) return false;
   return true;

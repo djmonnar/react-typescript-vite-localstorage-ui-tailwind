@@ -15,6 +15,7 @@ import type {
   Skill,
   SkillCondition,
   SkillStat,
+  Trait,
   UnitTagBehavior,
   TypeAdvantageReport,
   UnitDamage,
@@ -45,6 +46,8 @@ interface Combatant {
   tilesMoved: number;
   deathProcessed: boolean;
 }
+
+type DynamicTraitEffectType = ActiveBuff['effectType'];
 
 interface DamageResult {
   damage: number;
@@ -174,6 +177,75 @@ function tagBehaviorValue(combatant: Combatant, type: UnitTagBehavior['type']): 
 function tagBehaviorsForUnit(data: AppData, unit: EffectiveUnit): UnitTagBehavior[] {
   const byName = new Map(data.unitTags.map((tag) => [tag.name, tag.behaviors ?? []]));
   return unit.tags.flatMap((tagName) => byName.get(tagName) ?? []);
+}
+
+function traitTargetsCombatant(combatant: Combatant, trait: Trait): boolean {
+  const unit = combatant.unit;
+  if (trait.targetSide && trait.targetSide !== 'ally') return false;
+  if (trait.targetV2 === 'heroes' && !unit.isHero) return false;
+  if (trait.targetV2 === 'nonHeroes' && unit.isHero) return false;
+  if (trait.targetV2 === 'meleeUnits' && unit.range > 1) return false;
+  if (trait.targetV2 === 'rangedUnits' && unit.range <= 1) return false;
+  if (trait.filters?.attackTypeId && unit.attackType !== trait.filters.attackTypeId) return false;
+  if (trait.filters?.defenseTypeId && unit.defenseType !== trait.filters.defenseTypeId) return false;
+  if (typeof trait.filters?.isHero === 'boolean' && unit.isHero !== trait.filters.isHero) return false;
+
+  const requiredTags = trait.filters?.tags ?? [];
+  if (requiredTags.length > 0 && !requiredTags.every((tag) => unit.tags.includes(tag))) return false;
+
+  return true;
+}
+
+function dynamicTraitEffect(effect: { type: string; value: number }): { effectType: DynamicTraitEffectType; valueType: 'flat' | 'percent'; value: number } | undefined {
+  if (effect.type === 'attackPercent') return { effectType: 'attackBuff', valueType: 'percent', value: effect.value };
+  if (effect.type === 'defenseFlat') return { effectType: 'defenseBuff', valueType: 'flat', value: effect.value };
+  if (effect.type === 'moveSpeedPercent') return { effectType: 'moveSpeedBuff', valueType: 'percent', value: effect.value };
+  if (effect.type === 'moveSpeedFlat') return { effectType: 'moveSpeedBuff', valueType: 'flat', value: effect.value };
+  if (effect.type === 'rangeFlat') return { effectType: 'rangeBuff', valueType: 'flat', value: effect.value };
+  if (effect.type === 'attackSpeedPercent') return { effectType: 'attackSpeedBuff', valueType: 'percent', value: effect.value };
+  return undefined;
+}
+
+function applyDynamicTraitBuffs(combatants: Combatant[], data: AppData) {
+  for (const combatant of combatants) {
+    combatant.buffs = combatant.buffs.filter((buff) => !buff.sourceSkillId.startsWith('trait:'));
+  }
+
+  const aliveA = alive(combatants, 'A');
+  const aliveB = alive(combatants, 'B');
+  const hasAliveHero = {
+    A: aliveA.some((combatant) => combatant.unit.isHero),
+    B: aliveB.some((combatant) => combatant.unit.isHero),
+  };
+
+  for (const team of ['A', 'B'] as const) {
+    if (!hasAliveHero[team]) continue;
+    const teamCombatants = team === 'A' ? aliveA : aliveB;
+    const raceIds = new Set(teamCombatants.map((combatant) => combatant.unit.raceId));
+    const teamTraits = data.races
+      .filter((race) => raceIds.has(race.id))
+      .flatMap((race) => data.traits.filter((trait) => race.traitIds.includes(trait.id)));
+
+    for (const trait of teamTraits) {
+      if (trait.triggerV2 !== 'whenHeroAlive') continue;
+      const effects = trait.effectsV2 && trait.effectsV2.length > 0 ? trait.effectsV2 : trait.effects ?? [];
+      for (const combatant of teamCombatants) {
+        if (!traitTargetsCombatant(combatant, trait)) continue;
+        for (const effect of effects) {
+          const buff = dynamicTraitEffect(effect);
+          if (!buff) continue;
+          combatant.buffs.push({
+            id: `trait_${trait.id}_${combatant.id}_${effect.type}`,
+            sourceSkillId: `trait:${trait.id}`,
+            effectType: buff.effectType,
+            value: buff.value,
+            valueType: buff.valueType,
+            expiresAt: 0,
+          });
+        }
+      }
+    }
+  }
 }
 
 function isBackAttackFrom(attackerTile: GridTile, defender: Combatant): boolean {
@@ -348,6 +420,46 @@ function chooseBackAttackTile(attacker: Combatant, target: Combatant, combatants
 
   const best = candidates[0];
   if (!best) return { fromTile, toTile: fromTile, steps: 0 };
+  attacker.tile = best.tile;
+  attacker.facing = directionTo(fromTile, best.tile, attacker.facing);
+  attacker.moveCount += 1;
+  attacker.tilesMoved += best.steps;
+  return { fromTile, toTile: best.tile, steps: best.steps };
+}
+
+function backAttackTiles(attacker: Combatant, target: Combatant, combatants: Combatant[]): GridTile[] {
+  const occupied = occupiedTiles(combatants, attacker.id);
+  return Array.from({ length: GRID_WIDTH * GRID_HEIGHT }, (_, index) => ({ x: index % GRID_WIDTH, y: Math.floor(index / GRID_WIDTH) }))
+    .filter((tile) => !sameTile(tile, attacker.tile))
+    .filter((tile) => inBounds(tile) && !occupied.has(tileKey(tile)))
+    .filter((tile) => canAttackFrom(attacker, tile, target))
+    .filter((tile) => isBackAttackFrom(tile, target));
+}
+
+function chooseBackAttackApproachTile(attacker: Combatant, target: Combatant, combatants: Combatant[]): { fromTile: GridTile; toTile: GridTile; steps: number } {
+  const fromTile = attacker.tile;
+  const desiredTiles = backAttackTiles(attacker, target, combatants);
+  if (desiredTiles.length === 0) return chooseMoveTile(attacker, target, combatants);
+
+  const occupied = occupiedTiles(combatants, attacker.id);
+  const reachable = reachableTiles(attacker.tile, movePower(attacker), occupied);
+  const currentBestDistance = Math.min(...desiredTiles.map((tile) => tileDistance(attacker.tile, tile)));
+  const best = [...reachable]
+    .filter((entry) => entry.steps > 0)
+    .map((entry) => ({
+      ...entry,
+      backDistance: Math.min(...desiredTiles.map((tile) => tileDistance(entry.tile, tile))),
+      targetDistance: tileDistance(entry.tile, target.tile),
+    }))
+    .sort((left, right) => {
+      const backDelta = left.backDistance - right.backDistance;
+      if (backDelta !== 0) return backDelta;
+      const targetDelta = left.targetDistance - right.targetDistance;
+      if (targetDelta !== 0) return targetDelta;
+      return left.steps - right.steps;
+    })[0];
+
+  if (!best || best.backDistance >= currentBestDistance) return chooseMoveTile(attacker, target, combatants);
   attacker.tile = best.tile;
   attacker.facing = directionTo(fromTile, best.tile, attacker.facing);
   attacker.moveCount += 1;
@@ -1153,6 +1265,7 @@ export function simulateBattle(
 
   while (time <= MAX_TIME && alive(combatants, 'A').length > 0 && alive(combatants, 'B').length > 0) {
     expireBuffs(combatants, time);
+    applyDynamicTraitBuffs(combatants, data);
     const actors = alive(combatants).sort((left, right) => left.team.localeCompare(right.team) || left.order - right.order);
 
     for (const actor of actors) {
@@ -1255,7 +1368,9 @@ export function simulateBattle(
         const closestEnemy = selectClosest(actor, enemies);
         const move = hasTagBehavior(actor, 'cannotAttackAdjacent') && tileDistance(actor.tile, closestEnemy.tile) <= 1
           ? chooseKiteTile(actor, closestEnemy, combatants)
-          : chooseMoveTile(actor, closestEnemy, combatants);
+          : hasTagBehavior(actor, 'seekBackAttack')
+            ? chooseBackAttackApproachTile(actor, closestEnemy, combatants)
+            : chooseMoveTile(actor, closestEnemy, combatants);
         maybeRecordMove(actor, move, time, skillContext);
       }
     }

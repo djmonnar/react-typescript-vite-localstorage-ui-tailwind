@@ -1,4 +1,4 @@
-import { Pause, Play, RotateCcw, SkipBack } from 'lucide-react';
+import { Maximize2, Pause, Play, RotateCcw, SkipBack, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { UnitIcon } from './UnitIcon';
 import type {
@@ -15,6 +15,8 @@ import { formatSkillEventSummary, skillEffectLabels, teamLabel } from '../utils/
 
 interface BattleReplayBoardProps {
   replay: BattleReplay;
+  isFullscreen?: boolean;
+  onClose?: () => void;
 }
 
 interface ReplayUnitState extends BattleReplayUnit {
@@ -30,11 +32,12 @@ interface ReplayUnitState extends BattleReplayUnit {
 const SPEEDS = [0.5, 1, 2, 4] as const;
 const BASE_DELAY_MS = 650;
 
-export function BattleReplayBoard({ replay }: BattleReplayBoardProps) {
+export function BattleReplayBoard({ isFullscreen = false, onClose, replay }: BattleReplayBoardProps) {
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(2);
   const [selectedUnitId, setSelectedUnitId] = useState('');
+  const [expanded, setExpanded] = useState(false);
   const events = replay.events;
   const activeEvent = step > 0 ? events[step - 1] : undefined;
   const gridWidth = replay.gridWidth ?? 10;
@@ -72,8 +75,8 @@ export function BattleReplayBoard({ replay }: BattleReplayBoardProps) {
     );
   }
 
-  return (
-    <section className="space-y-3 rounded-md border border-cyan/30 bg-cyan/5 p-3">
+  const board = (
+    <section className={`${isFullscreen ? 'min-h-full space-y-3 rounded-md border border-cyan/30 bg-[#09111b] p-3 shadow-2xl shadow-cyan/10' : 'space-y-3 rounded-md border border-cyan/30 bg-cyan/5 p-3'}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="label">전투 리플레이</p>
@@ -84,6 +87,15 @@ export function BattleReplayBoard({ replay }: BattleReplayBoardProps) {
             {step}/{events.length} 이벤트 | {activeEvent ? `${activeEvent.time.toFixed(2)}초` : '00.00초'} | {progress}%
           </p>
         </div>
+        {isFullscreen ? (
+          <button className="btn min-h-11 shrink-0" onClick={onClose} type="button">
+            <X size={16} />닫기
+          </button>
+        ) : (
+          <button className="btn min-h-11 shrink-0" onClick={() => setExpanded(true)} type="button">
+            <Maximize2 size={16} />전투맵 전체화면
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-2">
@@ -162,43 +174,70 @@ export function BattleReplayBoard({ replay }: BattleReplayBoardProps) {
         </div>
       ) : null}
 
-      <div className="rounded-md border border-line bg-[#070a10] p-2">
+      <div className={`rounded-md border border-line bg-[#070a10] ${isFullscreen ? 'p-3' : 'p-2'}`}>
         <div className="mb-2 flex items-center justify-between font-mono text-[10px] font-bold text-muted">
           <span>A 팩션 | {replay.factionAName}</span>
-          <span>전투 맵</span>
+          <span className="text-cyan">{isFullscreen ? 'TACTICAL GRID LIVE' : '전투 맵'}</span>
           <span>B 팩션 | {replay.factionBName}</span>
         </div>
-        <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${gridWidth}, minmax(0, 1fr))` }}>
-          {Array.from({ length: gridWidth * gridHeight }, (_, index) => {
-            const tile = { x: index % gridWidth, y: Math.floor(index / gridWidth) };
-            const unit = unitStates.find((candidate) => candidate.tile.x === tile.x && candidate.tile.y === tile.y && !candidate.dead);
-            return (
-              <div
-                className={`relative aspect-square min-h-11 rounded border ${
-                  tile.x < 2
-                    ? 'border-cyan/20 bg-cyan/5'
-                    : tile.x >= gridWidth - 2
-                      ? 'border-danger/20 bg-danger/5'
-                      : 'border-line bg-[#0b1018]'
-                }`}
-                key={`${tile.x}:${tile.y}`}
-              >
-                {unit ? (
-                  <BattlefieldToken
-                    activeEvent={activeEvent}
-                    isSelected={unit.combatantId === selectedUnit?.combatantId}
-                    onSelect={() => setSelectedUnitId(unit.combatantId)}
-                    unit={unit}
-                  />
-                ) : null}
-              </div>
-            );
-          })}
+        <div className={isFullscreen ? 'overflow-x-auto pb-2' : ''}>
+          <div
+            className={`grid gap-1 ${isFullscreen ? 'min-w-[520px]' : ''}`}
+            style={{ gridTemplateColumns: `repeat(${gridWidth}, minmax(${isFullscreen ? '3rem' : '0'}, 1fr))` }}
+          >
+            {Array.from({ length: gridWidth * gridHeight }, (_, index) => {
+              const tile = { x: index % gridWidth, y: Math.floor(index / gridWidth) };
+              const unit = unitStates.find((candidate) => candidate.tile.x === tile.x && candidate.tile.y === tile.y && !candidate.dead);
+              const centerLine = tile.x === Math.floor(gridWidth / 2) - 1 || tile.x === Math.floor(gridWidth / 2);
+              return (
+                <div
+                  className={`relative aspect-square rounded border ${
+                    isFullscreen ? 'min-h-14' : 'min-h-11'
+                  } ${
+                    tile.x < 2
+                      ? 'border-cyan/25 bg-cyan/10'
+                      : tile.x >= gridWidth - 2
+                        ? 'border-danger/25 bg-danger/10'
+                        : centerLine
+                          ? 'border-amber/20 bg-amber/5'
+                          : 'border-line bg-[#0b1018]'
+                  }`}
+                  key={`${tile.x}:${tile.y}`}
+                >
+                  {centerLine ? <div className="pointer-events-none absolute inset-y-1 left-1/2 w-px bg-amber/20" /> : null}
+                  {unit ? (
+                    <BattlefieldToken
+                      activeEvent={activeEvent}
+                      isFullscreen={isFullscreen}
+                      isSelected={unit.combatantId === selectedUnit?.combatantId}
+                      onSelect={() => setSelectedUnitId(unit.combatantId)}
+                      unit={unit}
+                    />
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       {selectedUnit ? <ReplayUnitDetail unit={selectedUnit} /> : null}
     </section>
+  );
+
+  return (
+    <>
+      {isFullscreen ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-[#03060a]/95 p-2 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur">
+          {board}
+        </div>
+      ) : (
+        board
+      )}
+      {!isFullscreen && expanded ? (
+        <BattleReplayBoard isFullscreen onClose={() => setExpanded(false)} replay={replay} />
+      ) : null}
+    </>
   );
 }
 
@@ -282,11 +321,13 @@ function buildReplayState(replay: BattleReplay, step: number): ReplayUnitState[]
 
 function BattlefieldToken({
   activeEvent,
+  isFullscreen,
   isSelected,
   onSelect,
   unit,
 }: {
   activeEvent?: BattleReplayEvent;
+  isFullscreen: boolean;
   isSelected: boolean;
   onSelect: () => void;
   unit: ReplayUnitState;
@@ -301,9 +342,11 @@ function BattlefieldToken({
 
   return (
     <button
-      className={`absolute inset-0 flex flex-col justify-between rounded p-1 text-left transition ${
+      className={`absolute inset-0 flex flex-col justify-between rounded text-left transition ${
+        isFullscreen ? 'p-1.5' : 'p-1'
+      } ${
         unit.dead ? 'bg-[#05070a] opacity-30 grayscale' : unit.team === 'A' ? 'bg-cyan/15' : 'bg-danger/15'
-      } ${attacking ? 'ring-2 ring-amber' : ''} ${targeted ? 'ring-2 ring-danger' : ''} ${
+      } ${attacking ? 'scale-105 ring-2 ring-amber shadow-lg shadow-amber/20' : ''} ${targeted ? 'animate-pulse ring-2 ring-danger shadow-lg shadow-danger/20' : ''} ${
         moving ? 'ring-2 ring-cyan' : ''
       } ${casting || skillTargeted ? 'ring-2 ring-acid' : ''} ${isSelected ? 'outline outline-2 outline-cyan' : ''}`}
       onClick={onSelect}
@@ -315,8 +358,8 @@ function BattlefieldToken({
         <span className="font-mono text-[10px] font-bold text-muted">{facingArrow(unit.facing)}</span>
         {unit.isHero ? <span className="text-[10px] font-bold text-amber">★</span> : null}
       </div>
-      <UnitIcon className="mx-auto h-4 w-4 text-ink" type={unit.iconType ?? (unit.isHero ? 'hero' : 'sword')} />
-      <p className="truncate text-center text-[10px] font-bold text-ink">{shortUnitName(unit.name)}</p>
+      <UnitIcon className={`mx-auto text-ink ${isFullscreen ? 'h-5 w-5' : 'h-4 w-4'}`} type={unit.iconType ?? (unit.isHero ? 'hero' : 'sword')} />
+      <p className={`truncate text-center font-bold text-ink ${isFullscreen ? 'text-[11px]' : 'text-[10px]'}`}>{shortUnitName(unit.name)}</p>
       <Bar color="bg-danger" percent={hpPercent} />
       <Bar color="bg-cyan" percent={shieldPercent} />
     </button>
