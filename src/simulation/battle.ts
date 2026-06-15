@@ -72,6 +72,11 @@ interface SkillContext {
   stats: Map<string, SkillStat>;
 }
 
+interface ActiveTraitLogEntry {
+  team: 'A' | 'B';
+  traitName: string;
+}
+
 const MAX_TIME = 300;
 const TICK_DURATION = 0.25;
 const MOVE_EVENT_INTERVAL = 0.5;
@@ -206,11 +211,18 @@ function dynamicTraitEffect(effect: { type: string; value: number }): { effectTy
   return undefined;
 }
 
-function applyDynamicTraitBuffs(combatants: Combatant[], data: AppData) {
+function applyDynamicTraitBuffs(
+  combatants: Combatant[],
+  data: AppData,
+  time: number,
+  context: SkillContext,
+  activeDynamicTraits: Map<string, ActiveTraitLogEntry>,
+) {
   for (const combatant of combatants) {
     combatant.buffs = combatant.buffs.filter((buff) => !buff.sourceSkillId.startsWith('trait:'));
   }
 
+  const currentActiveTraits = new Map<string, ActiveTraitLogEntry>();
   const aliveA = alive(combatants, 'A');
   const aliveB = alive(combatants, 'B');
   const hasAliveHero = {
@@ -229,6 +241,7 @@ function applyDynamicTraitBuffs(combatants: Combatant[], data: AppData) {
     for (const trait of teamTraits) {
       if (trait.triggerV2 !== 'whenHeroAlive') continue;
       const effects = trait.effectsV2 && trait.effectsV2.length > 0 ? trait.effectsV2 : trait.effects ?? [];
+      let appliedCount = 0;
       for (const combatant of teamCombatants) {
         if (!traitTargetsCombatant(combatant, trait)) continue;
         for (const effect of effects) {
@@ -242,9 +255,29 @@ function applyDynamicTraitBuffs(combatants: Combatant[], data: AppData) {
             valueType: buff.valueType,
             expiresAt: 0,
           });
+          appliedCount += 1;
         }
       }
+      if (appliedCount > 0) {
+        currentActiveTraits.set(`${team}:${trait.id}`, { team, traitName: trait.name });
+      }
     }
+  }
+
+  if (context.keepFullLog) {
+    for (const [key, entry] of currentActiveTraits) {
+      if (activeDynamicTraits.has(key)) continue;
+      context.logs.push(`[${time.toFixed(2).padStart(6, '0')}] TRAIT ON: ${entry.team}:${entry.traitName}`);
+    }
+    for (const [key, entry] of activeDynamicTraits) {
+      if (currentActiveTraits.has(key)) continue;
+      context.logs.push(`[${time.toFixed(2).padStart(6, '0')}] TRAIT OFF: ${entry.team}:${entry.traitName}`);
+    }
+  }
+
+  activeDynamicTraits.clear();
+  for (const [key, entry] of currentActiveTraits) {
+    activeDynamicTraits.set(key, entry);
   }
 }
 
@@ -1256,6 +1289,7 @@ export function simulateBattle(
   const skillStats = new Map<string, SkillStat>();
   const logs: string[] = [`[00.00] SIM: ${preset.name} 전술 그리드 교전 시작`];
   const skillContext: SkillContext = { replayEvents, recordReplay, logs, keepFullLog, stats: skillStats };
+  const activeDynamicTraits = new Map<string, ActiveTraitLogEntry>();
   let time = 0;
   let firstEngagementTime: number | undefined;
 
@@ -1265,7 +1299,7 @@ export function simulateBattle(
 
   while (time <= MAX_TIME && alive(combatants, 'A').length > 0 && alive(combatants, 'B').length > 0) {
     expireBuffs(combatants, time);
-    applyDynamicTraitBuffs(combatants, data);
+    applyDynamicTraitBuffs(combatants, data, time, skillContext, activeDynamicTraits);
     const actors = alive(combatants).sort((left, right) => left.team.localeCompare(right.team) || left.order - right.order);
 
     for (const actor of actors) {
