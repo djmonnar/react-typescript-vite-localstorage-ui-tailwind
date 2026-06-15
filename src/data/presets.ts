@@ -26,6 +26,26 @@ export interface TraitPreset {
   value: number;
 }
 
+export type FactionWizardStyleId = 'machine' | 'beast' | 'arcane' | 'sanctuary' | 'undead';
+export type FactionWizardCompositionId = 'balanced' | 'defense' | 'offense' | 'ranged' | 'heroic';
+
+export interface FactionWizardStyle {
+  id: FactionWizardStyleId;
+  name: string;
+  concept: string;
+  description: string;
+  recommendedTags: string[];
+  recommendedTraits: string[];
+  recommendedSkills: string[];
+}
+
+export interface FactionWizardComposition {
+  id: FactionWizardCompositionId;
+  name: string;
+  description: string;
+  roles: Array<'melee' | 'ranged' | 'tank' | 'support' | 'elite' | 'hero'>;
+}
+
 export const skillPresets: SkillPreset[] = [
   {
     name: '강타',
@@ -153,6 +173,62 @@ export const traitPresets: TraitPreset[] = [
   { name: '전열 강화', description: '탱커 태그 유닛의 HP가 증가합니다.', tags: ['탱커'], effectType: 'hpPercent', value: 20 },
   { name: '광전사의 피', description: '근접 태그 유닛의 공격속도가 증가합니다.', tags: ['근접'], effectType: 'attackSpeedPercent', value: 15 },
   { name: '마도 회로', description: '마법 태그 유닛의 공격력이 증가합니다.', tags: ['마법'], effectType: 'attackPercent', value: 15 },
+];
+
+export const factionWizardStyles: FactionWizardStyle[] = [
+  {
+    id: 'machine',
+    name: '기계 군단',
+    concept: '느리지만 단단한 기계 병단',
+    description: '높은 방어력과 보호막으로 전선을 밀어붙이는 팩션입니다.',
+    recommendedTags: ['기계', '중장갑', '탱커', '원거리'],
+    recommendedTraits: ['강철 장갑', '보호막 증폭'],
+    recommendedSkills: ['전술 보호막', '방패 올리기'],
+  },
+  {
+    id: 'beast',
+    name: '야수 부족',
+    concept: '빠른 이동과 근접 압박',
+    description: '빠르게 접근해 높은 공격 빈도로 적을 몰아붙이는 팩션입니다.',
+    recommendedTags: ['생체', '근접', '딜러'],
+    recommendedTraits: ['야수 본능', '광전사의 피'],
+    recommendedSkills: ['강타', '광폭화'],
+  },
+  {
+    id: 'arcane',
+    name: '마도 결사',
+    concept: '낮은 체력과 높은 마법 화력',
+    description: '원거리 마법 피해와 보조 기술로 전장을 제어하는 팩션입니다.',
+    recommendedTags: ['마법', '원거리', '지원가'],
+    recommendedTraits: ['마도 회로', '원거리 숙련'],
+    recommendedSkills: ['마력 폭발', '응급 치유'],
+  },
+  {
+    id: 'sanctuary',
+    name: '성역 기사단',
+    concept: '회복, 보호막, 영웅 중심 전투',
+    description: '영웅과 지원 유닛이 전열을 보호하며 오래 버티는 팩션입니다.',
+    recommendedTags: ['생체', '근접', '탱커', '지원가', '영웅'],
+    recommendedTraits: ['전열 강화', '영웅의 위압감'],
+    recommendedSkills: ['전술 보호막', '응급 치유', '전투 함성'],
+  },
+  {
+    id: 'undead',
+    name: '망자의 군단',
+    concept: '저가 물량과 끈질긴 전열',
+    description: '느리지만 끈질긴 근접 유닛을 다수 운용하는 팩션입니다.',
+    recommendedTags: ['언데드', '생체', '근접', '탱커'],
+    recommendedTraits: ['전열 강화'],
+    recommendedSkills: ['광폭화', '방패 올리기'],
+  },
+];
+
+export const factionWizardCompositions: FactionWizardComposition[] = [
+  { id: 'balanced', name: '균형형', description: '근접, 원거리, 탱커, 지원, 고급 딜러, 영웅을 고르게 생성합니다.', roles: ['melee', 'ranged', 'tank', 'support', 'elite', 'hero'] },
+  { id: 'defense', name: '방어형', description: '전열과 지원을 두껍게 구성합니다.', roles: ['tank', 'tank', 'ranged', 'support', 'elite', 'hero'] },
+  { id: 'offense', name: '공격형', description: '근접 압박과 고급 딜러 비중을 높입니다.', roles: ['melee', 'melee', 'ranged', 'elite', 'support', 'hero'] },
+  { id: 'ranged', name: '원거리형', description: '원거리 화력과 보호 전열을 중심으로 구성합니다.', roles: ['melee', 'tank', 'ranged', 'ranged', 'support', 'hero'] },
+  { id: 'heroic', name: '영웅 중심형', description: '적은 유닛 수에 강한 영웅과 보조 구성을 제공합니다.', roles: ['melee', 'ranged', 'support', 'hero'] },
 ];
 
 export function createSkillFromPreset(preset: SkillPreset): Skill {

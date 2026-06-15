@@ -194,19 +194,26 @@ function ArmyEditor({ label, units, army, onChange }: ArmyEditorProps) {
     <section className="panel space-y-3">
       <h3 className="font-semibold text-ink">{label}</h3>
       {units.map((unit) => (
-        <div className="rounded-md border border-line bg-[#0f141d] p-3" key={unit.id}>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div>
+        <div className="rounded-md border border-line bg-[#0f141d] p-2" key={unit.id}>
+          <div className="grid grid-cols-[1fr_112px] items-center gap-2">
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-ink">
                 {unit.isHero ? '★ ' : ''}
                 {unit.name}
               </p>
               <p className="text-xs text-muted">
-                {unit.role} · 공격 {unit.attack} · HP {unit.hp}
+                {unit.role} · HP {unit.hp} · 공격 {unit.attack}
               </p>
+              {unit.tags.length > 0 ? (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {unit.tags.slice(0, 4).map((tag) => (
+                    <span className="chip text-[9px]" key={tag}>{tag}</span>
+                  ))}
+                </div>
+              ) : null}
             </div>
+            <NumberStepper label="수량" onChange={(count) => onChange(unit.id, count)} value={countForLocal(army, unit.id)} />
           </div>
-          <NumberStepper label="수량" onChange={(count) => onChange(unit.id, count)} value={countForLocal(army, unit.id)} />
         </div>
       ))}
       {units.length === 0 ? <p className="text-sm text-muted">선택한 팩션에 유닛이 없습니다.</p> : null}

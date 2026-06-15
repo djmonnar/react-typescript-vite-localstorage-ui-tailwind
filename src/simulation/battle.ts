@@ -59,10 +59,11 @@ interface SkillContext {
 }
 
 const MAX_TIME = 300;
-const BATTLEFIELD_LENGTH = 100;
+const BATTLEFIELD_LENGTH = 70;
 const TICK_DURATION = 0.25;
 const MOVE_EVENT_INTERVAL = 0.5;
 const RANGE_SCALE = 5;
+const MOVE_SPEED_SCALE = 1.45;
 
 function matrixMultiplier(data: AppData, attackTypeId: string, defenseTypeId: string): number {
   return (
@@ -124,14 +125,14 @@ function clampPosition(value: number): number {
 }
 
 function startingPosition(team: 'A' | 'B', unit: EffectiveUnit, order: number): number {
-  const laneOffset = (order % 6) * 1.15;
+  const laneOffset = (order % 6) * 1.05;
   const heroOffset = (order % 3) * 0.55;
 
   if (team === 'A') {
-    return clampPosition(unit.isHero ? 1.5 + heroOffset : 4 + laneOffset);
+    return clampPosition(unit.isHero ? 4 + heroOffset : 6 + laneOffset);
   }
 
-  return clampPosition(unit.isHero ? 98.5 - heroOffset : 96 - laneOffset);
+  return clampPosition(unit.isHero ? BATTLEFIELD_LENGTH - 4 - heroOffset : BATTLEFIELD_LENGTH - 6 - laneOffset);
 }
 
 function expandArmy(data: AppData, entries: ArmyEntry[], team: 'A' | 'B'): Combatant[] {
@@ -194,7 +195,7 @@ function selectTargetInRange(attacker: Combatant, enemies: Combatant[]): Combata
 function moveToward(attacker: Combatant, target: Combatant): { fromPosition: number; toPosition: number } {
   const fromPosition = attacker.position;
   const gapToRange = Math.max(0, distance(attacker, target) - attackRange(attacker.unit));
-  const movement = Math.min(currentMoveSpeed(attacker) * TICK_DURATION, gapToRange);
+  const movement = Math.min(currentMoveSpeed(attacker) * TICK_DURATION * MOVE_SPEED_SCALE, gapToRange);
   const direction = target.position > attacker.position ? 1 : -1;
 
   attacker.position = clampPosition(attacker.position + direction * movement);
@@ -384,6 +385,8 @@ function activateSkill(
       targetNames: targets.map((target) => target.unit.name),
       effectType: skill.effectType,
       value: skill.value,
+      valueType: skill.valueType,
+      duration: skill.duration,
       totalApplied,
       targetHpAfter,
       targetShieldAfter,
@@ -473,7 +476,11 @@ function collectArmyStats(combatants: Combatant[]): ArmyStats {
   return { initialA, initialB, unitCounts, unitCosts };
 }
 
-function buildReplayUnits(combatants: Combatant[]): BattleReplay['units'] {
+function defenseTypeName(data: AppData, defenseTypeId: string): string {
+  return data.defenseTypes.find((type) => type.id === defenseTypeId)?.name ?? defenseTypeId;
+}
+
+function buildReplayUnits(combatants: Combatant[], data: AppData): BattleReplay['units'] {
   return combatants.map((combatant) => ({
     combatantId: combatant.id,
     unitId: combatant.unit.id,
@@ -485,6 +492,8 @@ function buildReplayUnits(combatants: Combatant[]): BattleReplay['units'] {
     maxShield: combatant.unit.effectiveShield,
     attackType: combatant.unit.attackType,
     defenseType: combatant.unit.defenseType,
+    attackTypeName: attackTypeName(data, combatant.unit.attackType),
+    defenseTypeName: defenseTypeName(data, combatant.unit.defenseType),
     initialPosition: combatant.position,
   }));
 }
@@ -563,6 +572,7 @@ function buildSkillAnalysis(skillStats: Map<string, SkillStat>) {
 function buildBalanceSuggestions(params: {
   winner: BattleResult['winner'];
   winnerName: string;
+  firstEngagementTime?: number;
   winRateA: number;
   winRateB: number;
   survivalRatios: BattleAnalysis['survivalRatios'];
@@ -584,6 +594,10 @@ function buildBalanceSuggestions(params: {
     suggestions.push(`${params.winnerName} 승률이 크게 앞섭니다. 패배 팩션의 핵심 딜러 공격력이나 전열 생존력을 소폭 올려보세요.`);
   } else {
     suggestions.push('승률 격차가 과하지 않습니다. 큰 수치 변경보다 상성 배율이나 생산 비용을 작게 조정하는 편이 좋습니다.');
+  }
+
+  if (typeof params.firstEngagementTime === 'number' && params.firstEngagementTime >= 8) {
+    suggestions.push(`첫 교전까지 ${params.firstEngagementTime}초가 걸렸습니다. 전장 길이 또는 이동속도를 조정해보세요.`);
   }
 
   if (winnerSurvival && winnerSurvival.ratioPercent >= 45) {
@@ -614,6 +628,7 @@ function buildAnalysis(params: {
   armyStats: ArmyStats;
   typeAdvantages: Map<string, TypeAdvantageReport>;
   skillStats: Map<string, SkillStat>;
+  firstEngagementTime?: number;
   winRateA: number;
   winRateB: number;
 }): BattleAnalysis {
@@ -647,6 +662,7 @@ function buildAnalysis(params: {
 
   return {
     winnerName,
+    firstEngagementTime: params.firstEngagementTime,
     topDamageUnit: params.totalDamageByUnit[0],
     damageShares,
     survivalRatios,
@@ -657,6 +673,7 @@ function buildAnalysis(params: {
     balanceSuggestions: buildBalanceSuggestions({
       winner: params.winner,
       winnerName,
+      firstEngagementTime: params.firstEngagementTime,
       winRateA: params.winRateA,
       winRateB: params.winRateB,
       survivalRatios,
@@ -684,6 +701,8 @@ function mergeManyAnalysis(results: BattleResult[], aggregate: {
   const typeTotals = new Map<string, TypeAdvantageReport>();
   const costTotals = new Map<string, CostEfficiency>();
   const skillTotals = new Map<string, SkillStat>();
+  let firstEngagementTotal = 0;
+  let firstEngagementCount = 0;
 
   for (const result of results) {
     for (const typeAdvantage of result.analysis?.typeAdvantages ?? []) {
@@ -717,6 +736,11 @@ function mergeManyAnalysis(results: BattleResult[], aggregate: {
       } else {
         skillTotals.set(skill.skillId, { ...skill });
       }
+    }
+
+    if (typeof result.analysis?.firstEngagementTime === 'number') {
+      firstEngagementTotal += result.analysis.firstEngagementTime;
+      firstEngagementCount += 1;
     }
   }
 
@@ -756,6 +780,7 @@ function mergeManyAnalysis(results: BattleResult[], aggregate: {
   ];
   const winnerName =
     aggregate.winner === 'A' ? aggregate.factionAName : aggregate.winner === 'B' ? aggregate.factionBName : '무승부';
+  const firstEngagementTime = firstEngagementCount > 0 ? round2(firstEngagementTotal / firstEngagementCount) : undefined;
 
   const averageSkillStats = new Map(
     [...skillTotals.values()].map((entry) => [
@@ -773,6 +798,7 @@ function mergeManyAnalysis(results: BattleResult[], aggregate: {
 
   return {
     winnerName,
+    firstEngagementTime,
     topDamageUnit: aggregate.totalDamageByUnit[0],
     damageShares,
     survivalRatios,
@@ -783,6 +809,7 @@ function mergeManyAnalysis(results: BattleResult[], aggregate: {
     balanceSuggestions: buildBalanceSuggestions({
       winner: aggregate.winner,
       winnerName,
+      firstEngagementTime,
       winRateA: aggregate.winRateA,
       winRateB: aggregate.winRateB,
       survivalRatios,
@@ -819,7 +846,7 @@ export function simulateBattle(
   const factionBName = data.races.find((race) => race.id === preset.raceBId)?.name ?? 'B';
   const combatants = [...expandArmy(data, preset.armyA, 'A'), ...expandArmy(data, preset.armyB, 'B')];
   const armyStats = collectArmyStats(combatants);
-  const replayUnits = recordReplay ? buildReplayUnits(combatants) : [];
+  const replayUnits = recordReplay ? buildReplayUnits(combatants, data) : [];
   const replayEvents: BattleReplayEvent[] = [];
   const typeAdvantages = new Map<string, TypeAdvantageReport>();
   const skillStats = new Map<string, SkillStat>();
@@ -832,6 +859,7 @@ export function simulateBattle(
     stats: skillStats,
   };
   let time = 0;
+  let firstEngagementTime: number | undefined;
 
   for (const combatant of alive(combatants)) {
     triggerSkills(combatant, 'battleStart', combatants, data, time, skillContext);
@@ -852,6 +880,7 @@ export function simulateBattle(
       const targetInRange = selectTargetInRange(actor, enemies);
 
       if (targetInRange && time >= actor.nextAttackAt) {
+        if (firstEngagementTime === undefined) firstEngagementTime = round2(time);
         const beforeShield = targetInRange.shield;
         const beforeHp = targetInRange.hp;
         const damageResult = applyDamage(actor, targetInRange, data);
@@ -964,6 +993,7 @@ export function simulateBattle(
     armyStats,
     typeAdvantages,
     skillStats,
+    firstEngagementTime,
     winRateA: winner === 'A' ? 100 : 0,
     winRateB: winner === 'B' ? 100 : 0,
   });
@@ -988,6 +1018,7 @@ export function simulateBattle(
             factionAName,
             factionBName,
             duration: battleTime,
+            battlefieldLength: BATTLEFIELD_LENGTH,
             units: replayUnits,
             events: replayEvents,
           },

@@ -147,6 +147,10 @@ function AnalysisReport({ analysis }: { analysis: NonNullable<AppData['lastResul
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Metric label="총 피해량 1위" value={analysis.topDamageUnit ? `${analysis.topDamageUnit.name} ${analysis.topDamageUnit.damage}` : '없음'} />
         <Metric
+          label="첫 교전"
+          value={typeof analysis.firstEngagementTime === 'number' ? `${analysis.firstEngagementTime}초` : '없음'}
+        />
+        <Metric
           label="상성 이득 1위"
           value={
             analysis.topAdvantagedAttackType

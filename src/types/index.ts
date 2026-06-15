@@ -213,6 +213,7 @@ export interface CostEfficiency {
 
 export interface BattleAnalysis {
   winnerName: string;
+  firstEngagementTime?: number;
   topDamageUnit?: UnitDamage;
   damageShares: DamageShare[];
   survivalRatios: SurvivalRatio[];
@@ -234,6 +235,8 @@ export interface BattleReplayUnit {
   maxShield: number;
   attackType: Id;
   defenseType: Id;
+  attackTypeName?: string;
+  defenseTypeName?: string;
   initialPosition: number;
 }
 
@@ -290,6 +293,8 @@ export interface BattleReplaySkillEvent extends BattleReplayBaseEvent {
   targetNames: string[];
   effectType: SkillEffectType;
   value: number;
+  valueType?: Skill['valueType'];
+  duration?: number;
   totalApplied: number;
   targetHpAfter?: Record<Id, number>;
   targetShieldAfter?: Record<Id, number>;
@@ -321,6 +326,7 @@ export interface BattleReplay {
   factionAName: string;
   factionBName: string;
   duration: number;
+  battlefieldLength?: number;
   units: BattleReplayUnit[];
   events: BattleReplayEvent[];
 }
