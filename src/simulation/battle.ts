@@ -260,6 +260,8 @@ function reachableTiles(start: GridTile, maxSteps: number, occupied: Set<string>
 
 function chooseMoveTile(attacker: Combatant, target: Combatant, combatants: Combatant[]): { fromTile: GridTile; toTile: GridTile; steps: number } {
   const fromTile = attacker.tile;
+  if (tileDistance(attacker.tile, target.tile) <= currentRange(attacker)) return { fromTile, toTile: fromTile, steps: 0 };
+
   const occupied = occupiedTiles(combatants, attacker.id);
   const reachable = reachableTiles(attacker.tile, movePower(attacker), occupied);
   const currentDistance = tileDistance(attacker.tile, target.tile);
