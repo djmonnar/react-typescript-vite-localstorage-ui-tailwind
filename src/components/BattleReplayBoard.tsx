@@ -432,7 +432,7 @@ function buildReplayState(replay: BattleReplay, step: number): ReplayUnitState[]
         target.dead = target.hp <= 0;
         target.lastAction = `${event.skillName} 적용`;
         if (
-          ['attackBuff', 'defenseBuff', 'moveSpeedBuff', 'attackSpeedBuff'].includes(event.effectType) &&
+          ['attackBuff', 'defenseBuff', 'moveSpeedBuff', 'attackSpeedBuff', 'rangeBuff', 'slow', 'taunt'].includes(event.effectType) &&
           (event.duration ?? 0) > 0 &&
           event.time + (event.duration ?? 0) >= replayTime
         ) {

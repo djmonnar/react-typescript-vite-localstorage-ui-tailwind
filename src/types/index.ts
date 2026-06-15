@@ -132,7 +132,8 @@ export type SkillEffectType =
   | 'burn'
   | 'summon'
   | 'cleanse'
-  | 'removeShield';
+  | 'removeShield'
+  | 'taunt';
 
 export interface SkillArea {
   type: 'single' | 'line' | 'circle' | 'cross';

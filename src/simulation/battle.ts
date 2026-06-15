@@ -41,6 +41,7 @@ interface Combatant {
   skillCooldowns: Record<string, number>;
   skillActivations: Record<string, number>;
   buffs: ActiveBuff[];
+  taunts: ActiveTaunt[];
   damageDone: number;
   moveCount: number;
   tilesMoved: number;
@@ -48,6 +49,14 @@ interface Combatant {
 }
 
 type DynamicTraitEffectType = ActiveBuff['effectType'];
+
+interface ActiveTaunt {
+  sourceId: string;
+  sourceName: string;
+  sourceTeam: 'A' | 'B';
+  skillName: string;
+  expiresAt: number;
+}
 
 interface DamageResult {
   damage: number;
@@ -127,6 +136,7 @@ function combatantCooldown(combatant: Combatant): number {
 function expireBuffs(combatants: Combatant[], time: number) {
   for (const combatant of combatants) {
     combatant.buffs = combatant.buffs.filter((buff) => buff.expiresAt <= 0 || buff.expiresAt > time);
+    combatant.taunts = combatant.taunts.filter((taunt) => taunt.expiresAt <= 0 || taunt.expiresAt > time);
   }
 }
 
@@ -355,6 +365,7 @@ function expandDeployment(data: AppData, preset: BattlePreset, team: 'A' | 'B', 
       skillCooldowns: {},
       skillActivations: {},
       buffs: [],
+      taunts: [],
       damageDone: 0,
       moveCount: 0,
       tilesMoved: 0,
@@ -383,6 +394,14 @@ function selectTargetInRange(attacker: Combatant, enemies: Combatant[]): Combata
     if (attacker.unit.range <= 1 || distanceDelta !== 0) return distanceDelta;
     return left.hp + left.shield - (right.hp + right.shield);
   })[0];
+}
+
+function selectTauntTarget(attacker: Combatant, enemies: Combatant[]): Combatant | undefined {
+  const activeTaunts = attacker.taunts
+    .map((taunt) => enemies.find((enemy) => enemy.id === taunt.sourceId))
+    .filter((enemy): enemy is Combatant => Boolean(enemy));
+  if (activeTaunts.length === 0) return undefined;
+  return [...activeTaunts].sort((left, right) => tileDistance(attacker.tile, left.tile) - tileDistance(attacker.tile, right.tile))[0];
 }
 
 function neighbors(tile: GridTile): GridTile[] {
@@ -803,6 +822,19 @@ function activateSkill(
       target.shield = Math.max(0, target.shield - amount);
       totalApplied += amount;
       stat.damage += amount;
+    }
+
+    if (skill.effectType === 'taunt') {
+      target.taunts = target.taunts.filter((taunt) => taunt.sourceId !== caster.id);
+      target.taunts.push({
+        sourceId: caster.id,
+        sourceName: caster.unit.name,
+        sourceTeam: caster.team,
+        skillName: skill.name,
+        expiresAt: skill.duration > 0 ? round2(time + skill.duration) : 0,
+      });
+      totalApplied += 1;
+      stat.buffActivations += 1;
     }
 
     targetHpAfter[target.id] = target.hp;
@@ -1313,7 +1345,12 @@ export function simulateBattle(
 
       const enemies = alive(combatants, actor.team === 'A' ? 'B' : 'A');
       if (enemies.length === 0) break;
-      let targetInRange = selectTargetInRange(actor, enemies);
+      const tauntTarget = selectTauntTarget(actor, enemies);
+      let targetInRange = tauntTarget
+        ? canAttackFrom(actor, actor.tile, tauntTarget)
+          ? tauntTarget
+          : undefined
+        : selectTargetInRange(actor, enemies);
 
       if (targetInRange && hasTagBehavior(actor, 'seekBackAttack') && !isBackAttackFrom(actor.tile, targetInRange)) {
         const move = chooseBackAttackTile(actor, targetInRange, combatants);
@@ -1403,7 +1440,7 @@ export function simulateBattle(
       }
 
       if (!targetInRange) {
-        const closestEnemy = selectClosest(actor, enemies);
+        const closestEnemy = tauntTarget ?? selectClosest(actor, enemies);
         const move = hasTagBehavior(actor, 'cannotAttackAdjacent') && tileDistance(actor.tile, closestEnemy.tile) <= 1
           ? chooseKiteTile(actor, closestEnemy, combatants)
           : hasTagBehavior(actor, 'seekBackAttack')

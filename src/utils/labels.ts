@@ -68,6 +68,7 @@ export const skillEffectLabels: Record<SkillEffectType, string> = {
   summon: '소환',
   cleanse: '정화',
   removeShield: '보호막 제거',
+  taunt: '도발',
 };
 
 export const skillValueTypeLabels: Record<Skill['valueType'], string> = {
@@ -207,6 +208,7 @@ export function formatSkillAutoDescription(skill: Skill): string {
   if (skill.effectType === 'shield') return `${trigger} ${target}에게 보호막 ${value}를 부여합니다.`;
   if (skill.effectType === 'mpRestore') return `${trigger} ${target}의 MP를 ${value} 회복합니다.`;
   if (skill.effectType === 'removeShield') return `${trigger} ${target}의 보호막을 ${value} 제거합니다.`;
+  if (skill.effectType === 'taunt') return `${trigger} ${target}을 ${duration || '전투 종료까지'} 자신을 공격하도록 도발합니다.`;
   return `${trigger} ${chance}${target}에게 ${effect} ${value} 효과를${duration} 부여합니다.`;
 }
 

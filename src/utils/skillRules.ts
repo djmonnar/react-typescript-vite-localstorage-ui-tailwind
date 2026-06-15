@@ -10,6 +10,7 @@ const durationEffectTypes = new Set<SkillEffectType>([
   'stun',
   'poison',
   'burn',
+  'taunt',
 ]);
 
 export function skillUsesDuration(skill: Skill): boolean {
