@@ -2,6 +2,7 @@ import type { AppData, BattlePreset, SkillCondition, SkillConditionType, Trait, 
 import { createDefaultUnitTags } from '../data/defaultTags';
 import { createSkillFromPreset, skillPresets } from '../data/presets';
 import { DEFAULT_MAX_COST, deploymentFromArmy, normalizeDeployment } from './battleGrid';
+import { normalizeTagBehaviors } from './tagBehaviors';
 
 export function ensureMatrix(data: AppData): TypeMatrix[] {
   const existing = new Map(
@@ -140,6 +141,7 @@ function normalizeUnitTags(unitTags: AppData['unitTags'] | undefined, units: Uni
         description: tag.description ?? '',
         category: tag.category ?? '커스텀',
         color: tag.color ?? '#a9b1d6',
+        behaviors: normalizeTagBehaviors('', tag.behaviors),
         notes: tag.notes ?? '',
       });
       continue;
@@ -151,6 +153,7 @@ function normalizeUnitTags(unitTags: AppData['unitTags'] | undefined, units: Uni
       description: tag.description?.trim() ? tag.description : defaultTag?.description ?? '',
       category: tag.category ?? '커스텀',
       color: tag.color ?? defaultTag?.color,
+      behaviors: normalizeTagBehaviors(tag.name, tag.behaviors ?? defaultTag?.behaviors),
       notes: tag.notes ?? '',
     });
   }
@@ -163,6 +166,7 @@ function normalizeUnitTags(unitTags: AppData['unitTags'] | undefined, units: Uni
       description: '',
       category: '커스텀',
       color: '#a9b1d6',
+      behaviors: normalizeTagBehaviors(tagName, undefined),
       notes: '',
     });
   }

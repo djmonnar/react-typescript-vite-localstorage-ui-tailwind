@@ -1,5 +1,5 @@
 import type { UnitTag, UnitTagCategory } from '../types';
-import { getTagPersonality } from '../utils/tagPersonalities';
+import { getDefaultTagBehaviors } from '../utils/tagBehaviors';
 
 export const defaultUnitTags = [
   '기계',
@@ -61,13 +61,14 @@ const colorByCategory: Record<UnitTagCategory, string> = {
 export function createDefaultUnitTags(): UnitTag[] {
   return defaultUnitTags.map((name) => {
     const category = categoryByTag[name] ?? '커스텀';
-    const personality = getTagPersonality(name);
+    const behaviors = getDefaultTagBehaviors(name);
     return {
       id: `tag_${name}`,
       name,
-      description: personality?.battleRule ?? `${name} 태그`,
+      description: behaviors.length > 0 ? `${name} 전투 특징 태그` : `${name} 태그`,
       category,
       color: colorByCategory[category],
+      behaviors,
       notes: '',
     };
   });

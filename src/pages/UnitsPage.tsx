@@ -21,8 +21,7 @@ import {
   skillTriggerLabels,
   skillValueTypeLabels,
 } from '../utils/labels';
-import { getTagPersonality } from '../utils/tagPersonalities';
-import type { TagPersonality } from '../utils/tagPersonalities';
+import { describeTagBehavior, resolveTagBehaviors } from '../utils/tagBehaviors';
 import { unitIconLabels, unitIconTypes } from '../utils/unitIconOptions';
 
 interface UnitsPageProps {
@@ -448,6 +447,7 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
               availableTags={availableTags}
               selectedTags={selectedUnit.tags}
               tagInput={tagInput}
+              unitTags={data.unitTags}
               onAddCustomTag={addCustomTag}
               onInputChange={setTagInput}
               onRemoveTag={(tag) => setUnitTags(selectedUnit.tags.filter((candidate) => candidate !== tag))}
@@ -557,6 +557,7 @@ function TagEditor({
   onToggleTag,
   selectedTags,
   tagInput,
+  unitTags,
 }: {
   availableTags: string[];
   onAddCustomTag: () => void;
@@ -565,10 +566,11 @@ function TagEditor({
   onToggleTag: (tag: string) => void;
   selectedTags: string[];
   tagInput: string;
+  unitTags: AppData['unitTags'];
 }) {
   const selectedPersonalities = selectedTags
-    .map(getTagPersonality)
-    .filter((personality): personality is TagPersonality => Boolean(personality));
+    .map((tag) => ({ tag, behaviors: resolveTagBehaviors(tag, unitTags) }))
+    .filter((entry) => entry.behaviors.length > 0);
 
   return (
     <div className="rounded-md border border-line bg-[#0f141d] p-3">
@@ -579,7 +581,7 @@ function TagEditor({
       <div className="flex flex-wrap gap-2">
         {availableTags.map((tag) => {
           const checked = selectedTags.includes(tag);
-          const personality = getTagPersonality(tag);
+          const behaviors = resolveTagBehaviors(tag, unitTags);
           return (
             <button
               className={`min-h-11 rounded-md border px-3 py-2 text-sm font-semibold ${
@@ -590,7 +592,7 @@ function TagEditor({
               type="button"
             >
               {tag}
-              {personality ? <span className="ml-2 text-[10px] text-cyan">개성</span> : null}
+              {behaviors.length > 0 ? <span className="ml-2 text-[10px] text-cyan">개성 {behaviors.length}</span> : null}
             </button>
           );
         })}
@@ -598,9 +600,9 @@ function TagEditor({
       {selectedPersonalities.length > 0 ? (
         <div className="mt-3 space-y-2 rounded-md border border-cyan/30 bg-cyan/10 p-3">
           <p className="text-xs font-bold text-cyan">적용 중인 태그 개성</p>
-          {selectedPersonalities.map((personality) => (
-            <p className="text-xs leading-5 text-muted" key={personality.name}>
-              <span className="font-bold text-ink">{personality.name}</span>: {personality.battleRule}
+          {selectedPersonalities.map((entry) => (
+            <p className="text-xs leading-5 text-muted" key={entry.tag}>
+              <span className="font-bold text-ink">{entry.tag}</span>: {entry.behaviors.map(describeTagBehavior).join(' · ')}
             </p>
           ))}
         </div>

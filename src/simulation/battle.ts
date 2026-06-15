@@ -15,6 +15,7 @@ import type {
   Skill,
   SkillCondition,
   SkillStat,
+  UnitTagBehavior,
   TypeAdvantageReport,
   UnitDamage,
 } from '../types';
@@ -26,6 +27,7 @@ interface Combatant {
   team: 'A' | 'B';
   order: number;
   unit: EffectiveUnit;
+  tagBehaviors: UnitTagBehavior[];
   hp: number;
   shield: number;
   mp: number;
@@ -70,7 +72,6 @@ interface SkillContext {
 const MAX_TIME = 300;
 const TICK_DURATION = 0.25;
 const MOVE_EVENT_INTERVAL = 0.5;
-const BACK_ATTACK_MULTIPLIER = 1.5;
 
 function matrixMultiplier(data: AppData, attackTypeId: string, defenseTypeId: string): number {
   return (
@@ -160,8 +161,19 @@ function directionTo(from: GridTile, to: GridTile, fallback: Facing): Facing {
   return fallback;
 }
 
-function hasTag(combatant: Combatant, tag: string): boolean {
-  return combatant.unit.tags.includes(tag);
+function hasTagBehavior(combatant: Combatant, type: UnitTagBehavior['type']): boolean {
+  return combatant.tagBehaviors.some((behavior) => behavior.type === type);
+}
+
+function tagBehaviorValue(combatant: Combatant, type: UnitTagBehavior['type']): number {
+  return combatant.tagBehaviors
+    .filter((behavior) => behavior.type === type)
+    .reduce((max, behavior) => Math.max(max, Number(behavior.value) || 0), 0);
+}
+
+function tagBehaviorsForUnit(data: AppData, unit: EffectiveUnit): UnitTagBehavior[] {
+  const byName = new Map(data.unitTags.map((tag) => [tag.name, tag.behaviors ?? []]));
+  return unit.tags.flatMap((tagName) => byName.get(tagName) ?? []);
 }
 
 function isBackAttackFrom(attackerTile: GridTile, defender: Combatant): boolean {
@@ -171,7 +183,7 @@ function isBackAttackFrom(attackerTile: GridTile, defender: Combatant): boolean 
 function canAttackFrom(attacker: Combatant, attackerTile: GridTile, target: Combatant): boolean {
   const distance = tileDistance(attackerTile, target.tile);
   if (distance > currentRange(attacker)) return false;
-  if (hasTag(attacker, '야포') && distance <= 1) return false;
+  if (hasTagBehavior(attacker, 'cannotAttackAdjacent') && distance <= 1) return false;
   return true;
 }
 
@@ -225,6 +237,7 @@ function expandDeployment(data: AppData, preset: BattlePreset, team: 'A' | 'B', 
       team,
       order,
       unit: effective,
+      tagBehaviors: tagBehaviorsForUnit(data, effective),
       hp: Math.max(1, effective.effectiveHp),
       shield: Math.max(0, effective.effectiveShield),
       mp: effective.mp,
@@ -257,7 +270,7 @@ function selectTargetInRange(attacker: Combatant, enemies: Combatant[]): Combata
   if (inRange.length === 0) return undefined;
 
   return [...inRange].sort((left, right) => {
-    if (hasTag(attacker, '후방공격')) {
+    if (hasTagBehavior(attacker, 'seekBackAttack')) {
       const backDelta = Number(isBackAttackFrom(attacker.tile, right)) - Number(isBackAttackFrom(attacker.tile, left));
       if (backDelta !== 0) return backDelta;
     }
@@ -386,7 +399,8 @@ function applyDamage(attacker: Combatant, defender: Combatant, data: AppData): D
   const baseDamage = Math.max(1, currentAttack(attacker) - currentDefense(defender));
   const typeMultiplier = matrixMultiplier(data, attacker.unit.attackType, defender.unit.defenseType);
   const backAttack = isBackAttackFrom(attacker.tile, defender);
-  const multiplier = round2(typeMultiplier * (backAttack ? BACK_ATTACK_MULTIPLIER : 1));
+  const backAttackBonus = backAttack ? tagBehaviorValue(attacker, 'backAttackDamagePercent') : 0;
+  const multiplier = round2(typeMultiplier * (1 + backAttackBonus / 100));
   const finalDamage = Math.max(1, Math.round(baseDamage * multiplier));
   const bonusDamage = Math.max(0, Math.round(baseDamage * typeMultiplier) - baseDamage);
   let remaining = finalDamage;
@@ -1150,13 +1164,13 @@ export function simulateBattle(
       if (enemies.length === 0) break;
       let targetInRange = selectTargetInRange(actor, enemies);
 
-      if (targetInRange && hasTag(actor, '후방공격') && !isBackAttackFrom(actor.tile, targetInRange)) {
+      if (targetInRange && hasTagBehavior(actor, 'seekBackAttack') && !isBackAttackFrom(actor.tile, targetInRange)) {
         const move = chooseBackAttackTile(actor, targetInRange, combatants);
         maybeRecordMove(actor, move, time, skillContext);
         targetInRange = canAttackFrom(actor, actor.tile, targetInRange) ? targetInRange : selectTargetInRange(actor, enemies);
       }
 
-      if (targetInRange && hasTag(actor, '무빙샷')) {
+      if (targetInRange && hasTagBehavior(actor, 'kite')) {
         const move = chooseKiteTile(actor, targetInRange, combatants);
         maybeRecordMove(actor, move, time, skillContext);
         targetInRange = canAttackFrom(actor, actor.tile, targetInRange) ? targetInRange : selectTargetInRange(actor, enemies);
@@ -1239,7 +1253,7 @@ export function simulateBattle(
 
       if (!targetInRange) {
         const closestEnemy = selectClosest(actor, enemies);
-        const move = hasTag(actor, '야포') && tileDistance(actor.tile, closestEnemy.tile) <= 1
+        const move = hasTagBehavior(actor, 'cannotAttackAdjacent') && tileDistance(actor.tile, closestEnemy.tile) <= 1
           ? chooseKiteTile(actor, closestEnemy, combatants)
           : chooseMoveTile(actor, closestEnemy, combatants);
         maybeRecordMove(actor, move, time, skillContext);

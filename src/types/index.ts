@@ -62,12 +62,24 @@ export type TraitEffectTypeV2 =
 
 export type UnitTagCategory = '종족' | '역할' | '전투방식' | '속성' | '상태' | '커스텀';
 
+export type TagBehaviorType =
+  | 'seekBackAttack'
+  | 'backAttackDamagePercent'
+  | 'kite'
+  | 'cannotAttackAdjacent';
+
+export interface UnitTagBehavior {
+  type: TagBehaviorType;
+  value?: number;
+}
+
 export interface UnitTag {
   id: Id;
   name: string;
   description: string;
   category: UnitTagCategory;
   color?: string;
+  behaviors?: UnitTagBehavior[];
   notes: string;
 }
 

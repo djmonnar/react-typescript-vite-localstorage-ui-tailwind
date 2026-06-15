@@ -16,11 +16,13 @@ import type {
   SkillEffectType,
   SkillTarget,
   SkillTrigger,
+  TagBehaviorType,
   Trait,
   TraitEffectTypeV2,
   TraitTarget,
   TraitTrigger,
   UnitTag,
+  UnitTagBehavior,
   UnitTagCategory,
 } from '../types';
 import { createId } from '../utils/ids';
@@ -37,7 +39,7 @@ import {
   traitTargetLabels,
   traitTriggerLabels,
 } from '../utils/labels';
-import { getTagPersonality, tacticalTagPersonalities } from '../utils/tagPersonalities';
+import { describeTagBehavior, tagBehaviorDefinitions } from '../utils/tagBehaviors';
 import { unitIconLabels, unitIconTypes } from '../utils/unitIconOptions';
 
 interface TypesPageProps {
@@ -454,17 +456,15 @@ export function TypesPage({ data, setData }: TypesPageProps) {
             </button>
           </div>
           <div className="rounded-md border border-cyan/30 bg-cyan/10 p-3">
-            <p className="text-sm font-bold text-cyan">전투 개성 태그</p>
+            <p className="text-sm font-bold text-cyan">태그 개성 빌더</p>
             <p className="mt-1 text-xs leading-5 text-muted">
-              아래 이름의 태그를 유닛에 붙이면 전투 AI가 해당 규칙을 사용합니다. 커스텀 태그는 조건/필터용으로 쓰이고,
-              전투 개성은 이 목록의 정확한 태그 이름에 연결됩니다.
+              태그 이름과 상관없이 아래 특징을 조합해 전투 행동을 만들 수 있습니다. 유닛에 이 태그를 붙이면 선택한 특징들이 전투 AI에 적용됩니다.
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              {tacticalTagPersonalities.map((personality) => (
-                <div className="rounded-md border border-line bg-[#0b0f16]/70 p-3" key={personality.name}>
-                  <p className="text-sm font-bold text-ink">{personality.name}</p>
-                  <p className="mt-1 text-xs font-semibold text-cyan">{personality.summary}</p>
-                  <p className="mt-2 text-xs leading-5 text-muted">{personality.battleRule}</p>
+              {tagBehaviorDefinitions.map((definition) => (
+                <div className="rounded-md border border-line bg-[#0b0f16]/70 p-3" key={definition.type}>
+                  <p className="text-sm font-bold text-ink">{definition.label}</p>
+                  <p className="mt-2 text-xs leading-5 text-muted">{definition.description}</p>
                 </div>
               ))}
             </div>
@@ -478,7 +478,7 @@ export function TypesPage({ data, setData }: TypesPageProps) {
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {filteredTags.map((tag) => {
-              const personality = getTagPersonality(tag.name);
+              const behaviors = tag.behaviors ?? [];
               return (
                 <button
                   className={`shrink-0 rounded-md border px-3 py-2 text-sm font-semibold ${selectedTag?.id === tag.id ? 'border-cyan bg-cyan/15 text-cyan' : 'border-line bg-[#0f141d] text-muted'}`}
@@ -488,7 +488,7 @@ export function TypesPage({ data, setData }: TypesPageProps) {
                 >
                   <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: tag.color ?? '#a9b1d6' }} />
                   {tag.name || '이름 없는 태그'}
-                  {personality ? <span className="ml-2 text-[10px] text-cyan">개성</span> : null}
+                  {behaviors.length > 0 ? <span className="ml-2 text-[10px] text-cyan">개성 {behaviors.length}</span> : null}
                 </button>
               );
             })}
@@ -497,17 +497,10 @@ export function TypesPage({ data, setData }: TypesPageProps) {
             <div className="space-y-3 rounded-md border border-line bg-[#10151f] p-3">
               <TextField label="태그 이름" onChange={(name) => updateTag({ name })} placeholder="예: 후방공격" value={selectedTag.name} />
               <TextField label="설명" multiline onChange={(description) => updateTag({ description })} value={selectedTag.description} />
-              {getTagPersonality(selectedTag.name) ? (
-                <div className="rounded-md border border-cyan/30 bg-cyan/10 p-3">
-                  <p className="text-sm font-bold text-cyan">이 태그의 전투 개성</p>
-                  <p className="mt-1 text-sm text-ink">{getTagPersonality(selectedTag.name)?.summary}</p>
-                  <p className="mt-2 text-xs leading-5 text-muted">{getTagPersonality(selectedTag.name)?.battleRule}</p>
-                </div>
-              ) : (
-                <div className="rounded-md border border-line bg-[#0b0f16] p-3 text-xs leading-5 text-muted">
-                  이 태그는 현재 전투 AI 개성이 없는 일반 태그입니다. 스킬 조건, 특성 필터, 유닛 분류에 사용할 수 있습니다.
-                </div>
-              )}
+              <TagBehaviorEditor
+                behaviors={selectedTag.behaviors ?? []}
+                onChange={(behaviors) => updateTag({ behaviors })}
+              />
               <label className="block">
                 <span className="label">카테고리</span>
                 <select className="field" onChange={(event) => updateTag({ category: event.target.value as UnitTagCategory })} value={selectedTag.category}>
@@ -570,6 +563,99 @@ export function TypesPage({ data, setData }: TypesPageProps) {
       ) : null}
 
       {activePanel === 'icons' ? <IconSettings /> : null}
+    </div>
+  );
+}
+
+function TagBehaviorEditor({
+  behaviors,
+  onChange,
+}: {
+  behaviors: UnitTagBehavior[];
+  onChange: (behaviors: UnitTagBehavior[]) => void;
+}) {
+  const hasBehavior = (type: TagBehaviorType) => behaviors.some((behavior) => behavior.type === type);
+  const getBehavior = (type: TagBehaviorType) => behaviors.find((behavior) => behavior.type === type);
+
+  const toggleBehavior = (type: TagBehaviorType) => {
+    const definition = tagBehaviorDefinitions.find((candidate) => candidate.type === type);
+    if (!definition) return;
+    if (hasBehavior(type)) {
+      onChange(behaviors.filter((behavior) => behavior.type !== type));
+      return;
+    }
+    onChange([
+      ...behaviors,
+      {
+        type,
+        value: definition.valueLabel ? definition.defaultValue ?? 0 : undefined,
+      },
+    ]);
+  };
+
+  const updateBehaviorValue = (type: TagBehaviorType, value: number) => {
+    onChange(behaviors.map((behavior) => (behavior.type === type ? { ...behavior, value } : behavior)));
+  };
+
+  return (
+    <div className="rounded-md border border-line bg-[#0b0f16] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-bold text-cyan">태그 개성</p>
+          <p className="mt-1 text-xs leading-5 text-muted">
+            여러 특징을 조합할 수 있습니다. 비워두면 전투 행동은 바뀌지 않고 조건/분류 태그로만 작동합니다.
+          </p>
+        </div>
+        {behaviors.length > 0 ? <span className="chip">개성 {behaviors.length}</span> : null}
+      </div>
+
+      <div className="mt-3 grid gap-2">
+        {tagBehaviorDefinitions.map((definition) => {
+          const checked = hasBehavior(definition.type);
+          const behavior = getBehavior(definition.type);
+          return (
+            <div
+              className={`rounded-md border p-3 ${
+                checked ? 'border-cyan bg-cyan/10' : 'border-line bg-[#10151f]'
+              }`}
+              key={definition.type}
+            >
+              <button
+                className="flex min-h-11 w-full items-start justify-between gap-3 text-left"
+                onClick={() => toggleBehavior(definition.type)}
+                type="button"
+              >
+                <span>
+                  <span className="block text-sm font-bold text-ink">{definition.label}</span>
+                  <span className="mt-1 block text-xs leading-5 text-muted">{definition.description}</span>
+                </span>
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${checked ? 'border-cyan text-cyan' : 'border-line text-muted'}`}>
+                  {checked ? 'ON' : 'OFF'}
+                </span>
+              </button>
+              {checked && definition.valueLabel ? (
+                <div className="mt-3">
+                  <NumberStepper
+                    label={definition.valueLabel}
+                    max={definition.max}
+                    min={definition.min}
+                    onChange={(value) => updateBehaviorValue(definition.type, value)}
+                    step={definition.step ?? 1}
+                    value={behavior?.value ?? definition.defaultValue ?? 0}
+                  />
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      {behaviors.length > 0 ? (
+        <div className="mt-3 rounded-md border border-cyan/30 bg-cyan/10 p-3">
+          <p className="text-xs font-bold text-cyan">현재 적용 특징</p>
+          <p className="mt-1 text-xs leading-5 text-muted">{behaviors.map(describeTagBehavior).join(' · ')}</p>
+        </div>
+      ) : null}
     </div>
   );
 }
