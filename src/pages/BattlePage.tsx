@@ -202,7 +202,7 @@ function ArmyEditor({ label, units, army, onChange }: ArmyEditorProps) {
                 {unit.name}
               </p>
               <p className="text-xs text-muted">
-                {unit.role} · ATK {unit.attack} · HP {unit.hp}
+                {unit.role} · 공격 {unit.attack} · HP {unit.hp}
               </p>
             </div>
           </div>

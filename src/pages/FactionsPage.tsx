@@ -166,7 +166,7 @@ export function FactionsPage({ data, setData }: FactionsPageProps) {
           <div className="flex flex-wrap gap-2">
             {factionUnits.map((unit) => (
               <span className="chip" key={unit.id}>
-                {unit.isHero ? 'HERO ' : ''}
+                {unit.isHero ? '영웅 ' : ''}
                 {unit.name}
               </span>
             ))}

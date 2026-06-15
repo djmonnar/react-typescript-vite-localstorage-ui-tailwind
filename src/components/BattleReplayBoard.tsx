@@ -8,6 +8,7 @@ import type {
   BattleReplaySkillEvent,
   BattleReplayUnit,
 } from '../types';
+import { formatSkillEventSummary, skillEffectLabels, teamLabel } from '../utils/labels';
 
 interface BattleReplayBoardProps {
   replay: BattleReplay;
@@ -80,7 +81,7 @@ export function BattleReplayBoard({ replay }: BattleReplayBoardProps) {
             {replay.factionAName} vs {replay.factionBName}
           </h3>
           <p className="mt-1 font-mono text-xs text-muted">
-            {step}/{events.length} events | {activeEvent ? `${activeEvent.time.toFixed(2)}s` : '00.00s'} | {progress}%
+            {step}/{events.length} 이벤트 | {activeEvent ? `${activeEvent.time.toFixed(2)}초` : '00.00초'} | {progress}%
           </p>
         </div>
       </div>
@@ -130,7 +131,7 @@ export function BattleReplayBoard({ replay }: BattleReplayBoardProps) {
           ) : null}
           {isSkillEvent(activeEvent) ? (
             <p className="mt-1 text-sm text-ink">
-              SKILL {activeEvent.effectType} | total {activeEvent.totalApplied}
+              스킬 {skillEffectLabels[activeEvent.effectType]} | 적용량 {activeEvent.totalApplied}
             </p>
           ) : null}
         </div>
@@ -139,9 +140,9 @@ export function BattleReplayBoard({ replay }: BattleReplayBoardProps) {
       <div className="overflow-x-auto rounded-md border border-line bg-[#070a10]">
         <div className="relative min-h-[360px] min-w-[720px] overflow-hidden p-4">
           <div className="mb-2 flex items-center justify-between font-mono text-xs font-bold text-muted">
-            <span>A | {replay.factionAName}</span>
-            <span>1D BATTLEFIELD</span>
-            <span>B | {replay.factionBName}</span>
+            <span>A 팩션 | {replay.factionAName}</span>
+            <span>1D 라인 전장</span>
+            <span>B 팩션 | {replay.factionBName}</span>
           </div>
 
           <div className="absolute left-8 right-8 top-[176px] h-1 rounded bg-line" />
@@ -257,7 +258,7 @@ function BattlefieldToken({
     >
       <div className="mb-1 flex items-center justify-between gap-1">
         <span className={`font-mono text-[10px] font-bold ${unit.team === 'A' ? 'text-cyan' : 'text-danger'}`}>{unit.team}</span>
-        {unit.isHero ? <span className="rounded bg-amber/15 px-1 text-[8px] font-bold text-amber">HERO</span> : null}
+        {unit.isHero ? <span className="rounded bg-amber/15 px-1 text-[8px] font-bold text-amber">영웅</span> : null}
       </div>
       <p className="truncate text-[10px] font-bold text-ink">{unit.name}</p>
       <Bar color="bg-danger" percent={hpPercent} />
@@ -289,15 +290,15 @@ function isSkillEvent(event: BattleReplayEvent | undefined): event is BattleRepl
 
 function eventSummary(event: BattleReplayEvent): string {
   if (isMoveEvent(event)) {
-    return `${event.team}:${event.unitName} MOVE ${event.fromPosition.toFixed(1)} -> ${event.toPosition.toFixed(1)}`;
+    return `${teamLabel(event.team)}:${event.unitName} 이동 ${event.fromPosition.toFixed(1)} -> ${event.toPosition.toFixed(1)}`;
   }
 
   if (isSkillEvent(event)) {
-    return `${event.casterTeam}:${event.casterName} SKILL ${event.skillName} -> ${event.targetNames.join(', ')}`;
+    return formatSkillEventSummary(event);
   }
 
-  const defenderName = event.defenderName ?? event.targetName ?? 'target';
+  const defenderName = event.defenderName ?? event.targetName ?? '대상';
   const attackerPosition = typeof event.attackerPosition === 'number' ? `@${event.attackerPosition.toFixed(1)}` : '';
   const defenderPosition = typeof event.defenderPosition === 'number' ? `@${event.defenderPosition.toFixed(1)}` : '';
-  return `${event.attackerName}${attackerPosition} -> ${defenderName}${defenderPosition}`;
+  return `${event.attackerName}${attackerPosition} 공격 -> ${defenderName}${defenderPosition}`;
 }

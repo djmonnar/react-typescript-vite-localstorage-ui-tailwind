@@ -5,42 +5,37 @@ import { NumberStepper } from '../components/NumberStepper';
 import { SectionHeader } from '../components/SectionHeader';
 import { TextField } from '../components/TextField';
 import { defaultUnitTags } from '../data/defaultTags';
+import { createTraitFromPreset, traitPresets } from '../data/presets';
 import type { AppData, AttackType, DefenseType, PassiveTraitEffectType, Trait, TraitEffectType } from '../types';
 import { createId } from '../utils/ids';
+import { formatTraitPreview, legacyTraitEffectLabels, passiveTraitEffectLabels } from '../utils/labels';
 
 interface TypesPageProps {
   data: AppData;
   setData: (updater: (current: AppData) => AppData) => void;
 }
 
-const effectLabels: Record<TraitEffectType, string> = {
-  allHpPercent: '모든 유닛 HP %',
-  allAttackPercent: '모든 유닛 공격력 %',
-  allDefenseFlat: '모든 유닛 방어력 고정값',
-  defenseTypeAttackPercent: '특정 방어타입 유닛 공격력 %',
-  attackTypeAttackPercent: '특정 공격타입 유닛 공격력 %',
-  productionSpeedPercent: '생산속도 %',
-  moveSpeedPercent: '이동속도 %',
-};
+type TypePanel = 'attack' | 'defense' | 'matrix' | 'traits';
 
-const passiveEffectLabels: Record<PassiveTraitEffectType, string> = {
-  hpPercent: 'HP %',
-  attackPercent: '공격력 %',
-  defenseFlat: '방어력 고정값',
-  shieldPercent: '보호막 %',
-  moveSpeedPercent: '이동속도 %',
-  attackSpeedPercent: '공격속도 %',
-};
+const typePanels: Array<{ id: TypePanel; label: string }> = [
+  { id: 'attack', label: '공격 타입' },
+  { id: 'defense', label: '방어 타입' },
+  { id: 'matrix', label: '타입 배율' },
+  { id: 'traits', label: '팩션 특성' },
+];
 
 export function TypesPage({ data, setData }: TypesPageProps) {
   const [attackId, setAttackId] = useState(data.attackTypes[0]?.id ?? '');
   const [defenseId, setDefenseId] = useState(data.defenseTypes[0]?.id ?? '');
   const [traitId, setTraitId] = useState(data.traits[0]?.id ?? '');
+  const [activePanel, setActivePanel] = useState<TypePanel>('matrix');
+  const [selectedTraitPreset, setSelectedTraitPreset] = useState(traitPresets[0]?.name ?? '');
   const selectedAttack = data.attackTypes.find((type) => type.id === attackId) ?? data.attackTypes[0];
   const selectedDefense = data.defenseTypes.find((type) => type.id === defenseId) ?? data.defenseTypes[0];
   const selectedTrait = data.traits.find((trait) => trait.id === traitId) ?? data.traits[0];
   const availableTags = [...new Set([...defaultUnitTags, ...data.units.flatMap((unit) => unit.tags ?? [])])];
   const passiveEffect = selectedTrait?.effects?.[0] ?? { type: 'attackPercent' as const, value: 10 };
+  const traitPreview = selectedTrait ? formatTraitPreview(selectedTrait, data) : '';
 
   const updateAttack = (patch: Partial<AttackType>) => {
     if (!selectedAttack) return;
@@ -135,6 +130,18 @@ export function TypesPage({ data, setData }: TypesPageProps) {
     setTraitId(id);
   };
 
+  const addTraitPreset = () => {
+    const preset = traitPresets.find((candidate) => candidate.name === selectedTraitPreset) ?? traitPresets[0];
+    if (!preset) return;
+    const trait = createTraitFromPreset(preset);
+    setData((current) => ({
+      ...current,
+      traits: [...current.traits, trait],
+    }));
+    setTraitId(trait.id);
+    setActivePanel('traits');
+  };
+
   const deleteAttack = () => {
     if (!selectedAttack || data.attackTypes.length <= 1) return;
     const fallback = data.attackTypes.find((type) => type.id !== selectedAttack.id)?.id ?? '';
@@ -214,6 +221,22 @@ export function TypesPage({ data, setData }: TypesPageProps) {
         title="상성표"
       />
 
+      <div className="panel flex gap-2 overflow-x-auto p-2">
+        {typePanels.map((panel) => (
+          <button
+            className={`min-h-11 shrink-0 rounded-md border px-3 py-2 text-sm font-semibold ${
+              activePanel === panel.id ? 'border-cyan bg-cyan/15 text-cyan' : 'border-line bg-[#0f141d] text-muted'
+            }`}
+            key={panel.id}
+            onClick={() => setActivePanel(panel.id)}
+            type="button"
+          >
+            {panel.label}
+          </button>
+        ))}
+      </div>
+
+      {activePanel === 'attack' ? (
       <section className="panel space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="font-semibold text-ink">공격 타입</h3>
@@ -248,7 +271,9 @@ export function TypesPage({ data, setData }: TypesPageProps) {
           </div>
         ) : null}
       </section>
+      ) : null}
 
+      {activePanel === 'defense' ? (
       <section className="panel space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="font-semibold text-ink">방어 타입</h3>
@@ -283,7 +308,9 @@ export function TypesPage({ data, setData }: TypesPageProps) {
           </div>
         ) : null}
       </section>
+      ) : null}
 
+      {activePanel === 'matrix' ? (
       <section className="panel space-y-3">
         <h3 className="font-semibold text-ink">타입 배율 매트릭스</h3>
         <div className="overflow-x-auto">
@@ -320,13 +347,35 @@ export function TypesPage({ data, setData }: TypesPageProps) {
           </div>
         </div>
       </section>
+      ) : null}
 
+      {activePanel === 'traits' ? (
       <section className="panel space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="font-semibold text-ink">팩션 특성</h3>
           <button className="btn btn-primary" onClick={addTrait} type="button">
             <Plus size={16} />
-            추가
+            빈 특성
+          </button>
+        </div>
+        <p className="rounded-md border border-cyan/20 bg-cyan/5 px-3 py-2 text-xs leading-relaxed text-muted">
+          팩션 특성은 전투 시작 전에 팩션 전체에 적용되는 패시브 규칙입니다.
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+          <select
+            className="field"
+            onChange={(event) => setSelectedTraitPreset(event.target.value)}
+            value={selectedTraitPreset}
+          >
+            {traitPresets.map((preset) => (
+              <option key={preset.name} value={preset.name}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+          <button className="btn btn-primary" onClick={addTraitPreset} type="button">
+            <Plus size={16} />
+            특성 프리셋 추가
           </button>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
@@ -346,10 +395,19 @@ export function TypesPage({ data, setData }: TypesPageProps) {
 
         {selectedTrait ? (
           <div className="space-y-3">
-            <TextField label="이름" onChange={(name) => updateTrait({ name })} value={selectedTrait.name} />
-            <TextField label="설명" multiline onChange={(description) => updateTrait({ description })} value={selectedTrait.description} />
+            <div className="rounded-md border border-line bg-[#10151f] p-3">
+              <p className="mb-3 text-sm font-bold text-cyan">룰 빌더</p>
+              <div className="space-y-3">
+                <TextField label="특성 이름" onChange={(name) => updateTrait({ name })} value={selectedTrait.name} />
+                <TextField label="특성 설명" multiline onChange={(description) => updateTrait({ description })} value={selectedTrait.description} />
+                <div className="rounded-md border border-cyan/20 bg-cyan/5 px-3 py-2">
+                  <p className="label">미리보기 문장</p>
+                  <p className="text-sm leading-relaxed text-ink">{traitPreview}</p>
+                </div>
+              </div>
+            </div>
             <label className="block">
-              <span className="label">효과</span>
+              <span className="label">기존 단순 효과(호환용)</span>
               <select
                 className="field"
                 onChange={(event) =>
@@ -357,7 +415,7 @@ export function TypesPage({ data, setData }: TypesPageProps) {
                 }
                 value={selectedTrait.effectType}
               >
-                {Object.entries(effectLabels).map(([value, label]) => (
+                {Object.entries(legacyTraitEffectLabels).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>
@@ -397,11 +455,10 @@ export function TypesPage({ data, setData }: TypesPageProps) {
               </label>
             ) : null}
             <NumberStepper label="값" min={-100} onChange={(value) => updateTrait({ value })} value={selectedTrait.value} />
-            <TextField label="메모" multiline onChange={(notes) => updateTrait({ notes })} value={selectedTrait.notes} />
             <div className="rounded-md border border-line bg-[#0f141d] p-3">
               <div className="mb-3">
-                <p className="text-sm font-bold text-cyan">태그 기반 패시브</p>
-                <p className="mt-1 text-xs text-muted">전투 시작 시 아군 유닛 중 필터에 맞는 대상에게 적용됩니다.</p>
+                <p className="text-sm font-bold text-cyan">적용 대상 / 조건 / 효과</p>
+                <p className="mt-1 text-xs text-muted">전투 시작 시 아군 유닛 중 조건에 맞는 대상에게 적용됩니다.</p>
               </div>
 
               <div className="space-y-3">
@@ -489,7 +546,7 @@ export function TypesPage({ data, setData }: TypesPageProps) {
                       }
                       value={passiveEffect.type}
                     >
-                      {Object.entries(passiveEffectLabels).map(([value, label]) => (
+                      {Object.entries(passiveTraitEffectLabels).map(([value, label]) => (
                         <option key={value} value={value}>
                           {label}
                         </option>
@@ -499,13 +556,14 @@ export function TypesPage({ data, setData }: TypesPageProps) {
                 </div>
 
                 <NumberStepper
-                  label="패시브 수치"
+                  label="수치"
                   min={-100}
                   onChange={(value) => updatePassiveEffect({ value })}
                   value={passiveEffect.value}
                 />
               </div>
             </div>
+            <TextField label="메모" multiline onChange={(notes) => updateTrait({ notes })} value={selectedTrait.notes} />
             <button className="btn btn-danger w-full" onClick={deleteTrait} type="button">
               <Trash2 size={16} />
               특성 삭제
@@ -513,6 +571,7 @@ export function TypesPage({ data, setData }: TypesPageProps) {
           </div>
         ) : null}
       </section>
+      ) : null}
     </div>
   );
 }

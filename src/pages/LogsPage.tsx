@@ -5,6 +5,7 @@ import { BattleReplayBoard } from '../components/BattleReplayBoard';
 import { SectionHeader } from '../components/SectionHeader';
 import type { AppData, SimulationSummary } from '../types';
 import { exportData, importData } from '../utils/exportImport';
+import { teamLabel, winnerLabel as formatWinnerLabel } from '../utils/labels';
 
 interface LogsPageProps {
   data: AppData;
@@ -19,12 +20,7 @@ export function LogsPage({ data, setData, replaceData, resetData }: LogsPageProp
   const result = data.lastResult;
   const exported = useMemo(() => exportData(data), [data]);
   const isSummary = result && 'runs' in result;
-  const winnerLabel =
-    result?.winner === 'A'
-      ? (result.factionAName ?? 'A')
-      : result?.winner === 'B'
-        ? (result.factionBName ?? 'B')
-        : '무승부';
+  const displayWinner = result ? formatWinnerLabel(result.winner, result.factionAName, result.factionBName) : '무승부';
 
   const applyImport = () => {
     try {
@@ -45,10 +41,10 @@ export function LogsPage({ data, setData, replaceData, resetData }: LogsPageProp
       {result ? (
         <section className="panel space-y-3">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Metric label="승자" value={winnerLabel} />
+            <Metric label="승자" value={displayWinner} />
             <Metric label="A 승률" value={`${result.winRateA}%`} />
             <Metric label="B 승률" value={`${result.winRateB}%`} />
-            <Metric label="전투 시간" value={`${result.battleTime}s`} />
+            <Metric label="전투 시간" value={`${result.battleTime}초`} />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Metric label="A 팩션" value={result.factionAName ?? 'A'} />
@@ -82,7 +78,7 @@ export function LogsPage({ data, setData, replaceData, resetData }: LogsPageProp
             <div className="flex flex-wrap gap-2">
               {result.remainingUnits.map((unit) => (
                 <span className="chip" key={`${unit.team}:${unit.unitId}`}>
-                  {unit.team}:{unit.name} x{unit.count}
+                  {teamLabel(unit.team)}:{unit.name} x{unit.count}
                 </span>
               ))}
               {result.remainingUnits.length === 0 ? <span className="text-sm text-muted">생존 없음</span> : null}
@@ -165,7 +161,7 @@ function AnalysisReport({ analysis }: { analysis: NonNullable<AppData['lastResul
           <PercentRow
             key={entry.unitId}
             label={entry.name}
-            meta={`${entry.damage} dmg`}
+            meta={`${entry.damage} 피해`}
             percent={entry.sharePercent}
           />
         ))}
@@ -175,7 +171,7 @@ function AnalysisReport({ analysis }: { analysis: NonNullable<AppData['lastResul
         {analysis.survivalRatios.map((entry) => (
           <PercentRow
             key={entry.team}
-            label={`${entry.team} · ${entry.factionName}`}
+            label={`${teamLabel(entry.team)} · ${entry.factionName}`}
             meta={`${entry.remainingCount}/${entry.initialCount} 생존`}
             percent={entry.ratioPercent}
           />
@@ -187,7 +183,7 @@ function AnalysisReport({ analysis }: { analysis: NonNullable<AppData['lastResul
           <div className="flex items-center justify-between rounded-md border border-line bg-[#0f141d] px-3 py-2" key={entry.attackTypeId}>
             <span className="text-sm text-ink">{entry.attackTypeName}</span>
             <span className="font-mono text-xs text-acid">
-              +{entry.bonusDamage} / {entry.totalDamage} dmg · {entry.hitCount} hits
+              +{entry.bonusDamage} / {entry.totalDamage} 피해 · {entry.hitCount}회 적중
             </span>
           </div>
         ))}
@@ -199,7 +195,7 @@ function AnalysisReport({ analysis }: { analysis: NonNullable<AppData['lastResul
           <div className="flex items-center justify-between rounded-md border border-line bg-[#0f141d] px-3 py-2" key={entry.unitId}>
             <span className="text-sm text-ink">{entry.name}</span>
             <span className="font-mono text-xs text-amber">
-              {entry.efficiency} dmg/cost · cost {entry.totalCost}
+              비용 1당 피해 {entry.efficiency} · 총비용 {entry.totalCost}
             </span>
           </div>
         ))}
@@ -217,10 +213,10 @@ function AnalysisReport({ analysis }: { analysis: NonNullable<AppData['lastResul
             <div className="rounded-md border border-line bg-[#0f141d] px-3 py-2" key={skill.skillId}>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-semibold text-ink">{skill.skillName}</span>
-                <span className="font-mono text-xs text-acid">{skill.activations} casts</span>
+                <span className="font-mono text-xs text-acid">{skill.activations}회 발동</span>
               </div>
               <p className="mt-1 font-mono text-[10px] text-muted">
-                dmg {skill.damage} / heal {skill.healing} / shield {skill.shield} / buffs {skill.buffActivations}
+                피해 {skill.damage} / 회복 {skill.healing} / 보호막 {skill.shield} / 버프 {skill.buffActivations}
               </p>
             </div>
           ))}

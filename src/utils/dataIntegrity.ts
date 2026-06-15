@@ -50,14 +50,18 @@ function normalizeUnit(unit: Unit): Unit {
     ...unit,
     tags: Array.isArray(unit.tags) ? [...new Set(unit.tags.filter(Boolean))] : [],
     skillsV2: Array.isArray(unit.skillsV2)
-      ? unit.skillsV2.map((skill) => ({
-          ...skill,
-          cooldown: Number(skill.cooldown) || 0,
-          mpCost: Number(skill.mpCost) || 0,
-          chance: Math.max(0, Math.min(100, Number(skill.chance) || 0)),
-          duration: Number(skill.duration) || 0,
-          tags: Array.isArray(skill.tags) ? [...new Set(skill.tags.filter(Boolean))] : [],
-        }))
+      ? unit.skillsV2.map((skill) => {
+          const chance = Number(skill.chance ?? 100);
+          return {
+            ...skill,
+            valueType: skill.valueType ?? 'flat',
+            cooldown: Number(skill.cooldown) || 0,
+            mpCost: Number(skill.mpCost) || 0,
+            chance: Math.max(0, Math.min(100, Number.isFinite(chance) ? chance : 100)),
+            duration: Number(skill.duration) || 0,
+            tags: Array.isArray(skill.tags) ? [...new Set(skill.tags.filter(Boolean))] : [],
+          };
+        })
       : [],
   };
 }
