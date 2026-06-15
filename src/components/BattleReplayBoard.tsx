@@ -8,6 +8,7 @@ import type {
   BattleReplayMoveEvent,
   BattleReplaySkillEvent,
   BattleReplayUnit,
+  Facing,
   GridTile,
 } from '../types';
 import { formatSkillEventSummary, skillEffectLabels, teamLabel } from '../utils/labels';
@@ -21,6 +22,7 @@ interface ReplayUnitState extends BattleReplayUnit {
   shield: number;
   dead: boolean;
   tile: GridTile;
+  facing: Facing;
   activeBuffs: string[];
   lastAction: string;
 }
@@ -148,6 +150,7 @@ export function BattleReplayBoard({ replay }: BattleReplayBoardProps) {
           {isAttackEvent(activeEvent) ? (
             <p className="mt-1 text-sm text-ink">
               피해 {activeEvent.damage} | 보호막 -{activeEvent.shieldDamage} | HP -{activeEvent.hpDamage}
+              {activeEvent.backAttack ? ' | 백어택' : ''}
               {activeEvent.defeated ?? activeEvent.killed ? ' | 쓰러짐' : ''}
             </p>
           ) : null}
@@ -210,6 +213,7 @@ function buildReplayState(replay: BattleReplay, step: number): ReplayUnitState[]
       shield: unit.maxShield,
       dead: false,
       tile: unit.initialTile ?? { x: Math.round(unit.initialPosition ?? 0), y: unit.team === 'A' ? 0 : 5 },
+      facing: unit.initialFacing ?? (unit.team === 'A' ? 'E' : 'W'),
       activeBuffs: [],
       lastAction: '대기',
     });
@@ -222,6 +226,7 @@ function buildReplayState(replay: BattleReplay, step: number): ReplayUnitState[]
         const fromTile = event.fromTile ?? mover.tile;
         const toTile = event.toTile ?? { x: Math.round(event.toPosition), y: mover.tile.y };
         mover.tile = toTile;
+        if (event.facingAfter) mover.facing = event.facingAfter;
         mover.lastAction = `이동 (${fromTile.x},${fromTile.y}) -> (${toTile.x},${toTile.y})`;
       }
       continue;
@@ -233,10 +238,12 @@ function buildReplayState(replay: BattleReplay, step: number): ReplayUnitState[]
       const target = targetId ? state.get(targetId) : undefined;
       if (attacker) {
         if (event.attackerTile) attacker.tile = event.attackerTile;
-        attacker.lastAction = `${target?.name ?? event.defenderName ?? '대상'} 공격`;
+        if (event.attackerFacing) attacker.facing = event.attackerFacing;
+        attacker.lastAction = `${target?.name ?? event.defenderName ?? '대상'} 공격${event.backAttack ? ' (백어택)' : ''}`;
       }
       if (!target) continue;
       if (event.defenderTile) target.tile = event.defenderTile;
+      if (event.defenderFacing) target.facing = event.defenderFacing;
       target.hp = Math.max(0, event.defenderHpAfter ?? event.targetHpAfter ?? target.hp);
       target.shield = Math.max(0, event.defenderShieldAfter ?? event.targetShieldAfter ?? target.shield);
       target.dead = Boolean(event.defeated ?? event.killed) || target.hp <= 0;
@@ -247,6 +254,7 @@ function buildReplayState(replay: BattleReplay, step: number): ReplayUnitState[]
       const caster = state.get(event.casterId);
       if (caster) {
         if (event.casterTile) caster.tile = event.casterTile;
+        if (event.casterFacing) caster.facing = event.casterFacing;
         caster.lastAction = `${event.skillName} 사용`;
       }
       for (const targetId of event.targetIds) {
@@ -304,6 +312,7 @@ function BattlefieldToken({
     >
       <div className="flex items-center justify-between gap-1">
         <span className={`font-mono text-[9px] font-bold ${unit.team === 'A' ? 'text-cyan' : 'text-danger'}`}>{unit.team}</span>
+        <span className="font-mono text-[10px] font-bold text-muted">{facingArrow(unit.facing)}</span>
         {unit.isHero ? <span className="text-[10px] font-bold text-amber">★</span> : null}
       </div>
       <UnitIcon className="mx-auto h-4 w-4 text-ink" type={unit.iconType ?? (unit.isHero ? 'hero' : 'sword')} />
@@ -322,6 +331,7 @@ function ReplayUnitDetail({ unit }: { unit: ReplayUnitState }) {
           <p className="text-sm font-bold text-ink">{unit.isHero ? '★ ' : ''}{unit.name}</p>
           <p className="mt-1 text-xs text-muted">
             {teamLabel(unit.team)} · 위치 ({unit.tile.x}, {unit.tile.y})
+            {' '}· 방향 {facingLabel(unit.facing)}
           </p>
         </div>
         <span className={`chip ${unit.dead ? 'opacity-50' : ''}`}>{unit.dead ? '쓰러짐' : '생존'}</span>
@@ -361,6 +371,20 @@ function Bar({ color, percent }: { color: string; percent: number }) {
   );
 }
 
+function facingArrow(facing: Facing): string {
+  if (facing === 'N') return '↑';
+  if (facing === 'S') return '↓';
+  if (facing === 'E') return '→';
+  return '←';
+}
+
+function facingLabel(facing: Facing): string {
+  if (facing === 'N') return '위';
+  if (facing === 'S') return '아래';
+  if (facing === 'E') return '오른쪽';
+  return '왼쪽';
+}
+
 function shortUnitName(name: string): string {
   const compact = name.replace(/\s+/g, '');
   if (compact.length <= 4) return compact;
@@ -391,5 +415,5 @@ function eventSummary(event: BattleReplayEvent): string {
   const defenderName = event.defenderName ?? event.targetName ?? '대상';
   const from = event.attackerTile ? `(${event.attackerTile.x},${event.attackerTile.y})` : '';
   const to = event.defenderTile ? `(${event.defenderTile.x},${event.defenderTile.y})` : '';
-  return `${event.attackerName}${from} 공격 -> ${defenderName}${to}`;
+  return `${event.attackerName}${from} 공격 -> ${defenderName}${to}${event.backAttack ? ' [백어택]' : ''}`;
 }

@@ -133,12 +133,13 @@ function normalizeUnitTags(unitTags: AppData['unitTags'] | undefined, units: Uni
 
   for (const tag of unitTags ?? []) {
     if (!tag.name?.trim()) continue;
+    const defaultTag = byName.get(tag.name);
     byName.set(tag.name, {
       id: tag.id || `tag_${tag.name}`,
       name: tag.name,
-      description: tag.description ?? '',
+      description: tag.description?.trim() ? tag.description : defaultTag?.description ?? '',
       category: tag.category ?? '커스텀',
-      color: tag.color,
+      color: tag.color ?? defaultTag?.color,
       notes: tag.notes ?? '',
     });
   }

@@ -9,6 +9,7 @@ import type {
   BattleReplaySkillEvent,
   BattleResult,
   CostEfficiency,
+  Facing,
   GridTile,
   SimulationSummary,
   Skill,
@@ -31,6 +32,7 @@ interface Combatant {
   maxHp: number;
   maxMp: number;
   tile: GridTile;
+  facing: Facing;
   lastMoveLogAt: number;
   nextAttackAt: number;
   skillCooldowns: Record<string, number>;
@@ -46,6 +48,7 @@ interface DamageResult {
   damage: number;
   bonusDamage: number;
   multiplier: number;
+  backAttack: boolean;
 }
 
 interface ArmyStats {
@@ -67,6 +70,7 @@ interface SkillContext {
 const MAX_TIME = 300;
 const TICK_DURATION = 0.25;
 const MOVE_EVENT_INTERVAL = 0.5;
+const BACK_ATTACK_MULTIPLIER = 1.5;
 
 function matrixMultiplier(data: AppData, attackTypeId: string, defenseTypeId: string): number {
   return (
@@ -141,6 +145,36 @@ function tileDistance(left: GridTile, right: GridTile): number {
   return Math.abs(left.x - right.x) + Math.abs(left.y - right.y);
 }
 
+function oppositeFacing(facing: Facing): Facing {
+  if (facing === 'N') return 'S';
+  if (facing === 'S') return 'N';
+  if (facing === 'E') return 'W';
+  return 'E';
+}
+
+function directionTo(from: GridTile, to: GridTile, fallback: Facing): Facing {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) return dx > 0 ? 'E' : 'W';
+  if (dy !== 0) return dy > 0 ? 'S' : 'N';
+  return fallback;
+}
+
+function hasTag(combatant: Combatant, tag: string): boolean {
+  return combatant.unit.tags.includes(tag);
+}
+
+function isBackAttackFrom(attackerTile: GridTile, defender: Combatant): boolean {
+  return directionTo(defender.tile, attackerTile, defender.facing) === oppositeFacing(defender.facing);
+}
+
+function canAttackFrom(attacker: Combatant, attackerTile: GridTile, target: Combatant): boolean {
+  const distance = tileDistance(attackerTile, target.tile);
+  if (distance > currentRange(attacker)) return false;
+  if (hasTag(attacker, '야포') && distance <= 1) return false;
+  return true;
+}
+
 function currentRange(combatant: Combatant): number {
   return Math.max(1, Math.round(applyBuffValue(combatant.unit.range, combatant.buffs, 'rangeBuff')));
 }
@@ -197,6 +231,7 @@ function expandDeployment(data: AppData, preset: BattlePreset, team: 'A' | 'B', 
       maxHp: Math.max(1, effective.effectiveHp),
       maxMp: effective.mp,
       tile: preferredTile,
+      facing: team === 'A' ? 'E' : 'W',
       lastMoveLogAt: -MOVE_EVENT_INTERVAL,
       nextAttackAt: Number((Math.random() * cooldown(effective)).toFixed(2)),
       skillCooldowns: {},
@@ -218,11 +253,14 @@ function selectClosest(attacker: Combatant, enemies: Combatant[]): Combatant {
 }
 
 function selectTargetInRange(attacker: Combatant, enemies: Combatant[]): Combatant | undefined {
-  const range = currentRange(attacker);
-  const inRange = enemies.filter((enemy) => tileDistance(attacker.tile, enemy.tile) <= range);
+  const inRange = enemies.filter((enemy) => canAttackFrom(attacker, attacker.tile, enemy));
   if (inRange.length === 0) return undefined;
 
   return [...inRange].sort((left, right) => {
+    if (hasTag(attacker, '후방공격')) {
+      const backDelta = Number(isBackAttackFrom(attacker.tile, right)) - Number(isBackAttackFrom(attacker.tile, left));
+      if (backDelta !== 0) return backDelta;
+    }
     const distanceDelta = tileDistance(attacker.tile, left.tile) - tileDistance(attacker.tile, right.tile);
     if (attacker.unit.range <= 1 || distanceDelta !== 0) return distanceDelta;
     return left.hp + left.shield - (right.hp + right.shield);
@@ -262,7 +300,7 @@ function reachableTiles(start: GridTile, maxSteps: number, occupied: Set<string>
 
 function chooseMoveTile(attacker: Combatant, target: Combatant, combatants: Combatant[]): { fromTile: GridTile; toTile: GridTile; steps: number } {
   const fromTile = attacker.tile;
-  if (tileDistance(attacker.tile, target.tile) <= currentRange(attacker)) return { fromTile, toTile: fromTile, steps: 0 };
+  if (canAttackFrom(attacker, attacker.tile, target)) return { fromTile, toTile: fromTile, steps: 0 };
 
   const occupied = occupiedTiles(combatants, attacker.id);
   const reachable = reachableTiles(attacker.tile, movePower(attacker), occupied);
@@ -280,6 +318,57 @@ function chooseMoveTile(attacker: Combatant, target: Combatant, combatants: Comb
 
   if (!best || tileDistance(best.tile, target.tile) >= currentDistance) return { fromTile, toTile: fromTile, steps: 0 };
   attacker.tile = best.tile;
+  attacker.facing = directionTo(fromTile, best.tile, attacker.facing);
+  attacker.moveCount += 1;
+  attacker.tilesMoved += best.steps;
+  return { fromTile, toTile: best.tile, steps: best.steps };
+}
+
+function chooseBackAttackTile(attacker: Combatant, target: Combatant, combatants: Combatant[]): { fromTile: GridTile; toTile: GridTile; steps: number } {
+  const fromTile = attacker.tile;
+  const occupied = occupiedTiles(combatants, attacker.id);
+  const candidates = reachableTiles(attacker.tile, movePower(attacker), occupied)
+    .filter((entry) => entry.steps > 0)
+    .filter((entry) => canAttackFrom(attacker, entry.tile, target))
+    .filter((entry) => isBackAttackFrom(entry.tile, target))
+    .sort((left, right) => left.steps - right.steps || tileDistance(right.tile, target.tile) - tileDistance(left.tile, target.tile));
+
+  const best = candidates[0];
+  if (!best) return { fromTile, toTile: fromTile, steps: 0 };
+  attacker.tile = best.tile;
+  attacker.facing = directionTo(fromTile, best.tile, attacker.facing);
+  attacker.moveCount += 1;
+  attacker.tilesMoved += best.steps;
+  return { fromTile, toTile: best.tile, steps: best.steps };
+}
+
+function chooseKiteTile(attacker: Combatant, target: Combatant, combatants: Combatant[]): { fromTile: GridTile; toTile: GridTile; steps: number } {
+  const fromTile = attacker.tile;
+  const occupied = occupiedTiles(combatants, attacker.id);
+  const enemies = alive(combatants, attacker.team === 'A' ? 'B' : 'A');
+  const currentClosestDistance = Math.min(...enemies.map((enemy) => tileDistance(attacker.tile, enemy.tile)));
+  const currentTargetDistance = tileDistance(attacker.tile, target.tile);
+  const candidates = reachableTiles(attacker.tile, movePower(attacker), occupied)
+    .filter((entry) => entry.steps > 0)
+    .filter((entry) => canAttackFrom(attacker, entry.tile, target))
+    .map((entry) => ({
+      ...entry,
+      closestDistance: Math.min(...enemies.map((enemy) => tileDistance(entry.tile, enemy.tile))),
+      targetDistance: tileDistance(entry.tile, target.tile),
+    }))
+    .filter((entry) => entry.closestDistance > currentClosestDistance || entry.targetDistance > currentTargetDistance)
+    .sort((left, right) => {
+      const closestDelta = right.closestDistance - left.closestDistance;
+      if (closestDelta !== 0) return closestDelta;
+      const targetDelta = right.targetDistance - left.targetDistance;
+      if (targetDelta !== 0) return targetDelta;
+      return left.steps - right.steps;
+    });
+
+  const best = candidates[0];
+  if (!best) return { fromTile, toTile: fromTile, steps: 0 };
+  attacker.tile = best.tile;
+  attacker.facing = directionTo(fromTile, best.tile, attacker.facing);
   attacker.moveCount += 1;
   attacker.tilesMoved += best.steps;
   return { fromTile, toTile: best.tile, steps: best.steps };
@@ -295,9 +384,11 @@ function defenseTypeName(data: AppData, defenseTypeId: string): string {
 
 function applyDamage(attacker: Combatant, defender: Combatant, data: AppData): DamageResult {
   const baseDamage = Math.max(1, currentAttack(attacker) - currentDefense(defender));
-  const multiplier = matrixMultiplier(data, attacker.unit.attackType, defender.unit.defenseType);
+  const typeMultiplier = matrixMultiplier(data, attacker.unit.attackType, defender.unit.defenseType);
+  const backAttack = isBackAttackFrom(attacker.tile, defender);
+  const multiplier = round2(typeMultiplier * (backAttack ? BACK_ATTACK_MULTIPLIER : 1));
   const finalDamage = Math.max(1, Math.round(baseDamage * multiplier));
-  const bonusDamage = Math.max(0, finalDamage - baseDamage);
+  const bonusDamage = Math.max(0, Math.round(baseDamage * typeMultiplier) - baseDamage);
   let remaining = finalDamage;
 
   if (defender.shield > 0) {
@@ -311,7 +402,7 @@ function applyDamage(attacker: Combatant, defender: Combatant, data: AppData): D
   }
 
   attacker.damageDone += finalDamage;
-  return { damage: finalDamage, bonusDamage, multiplier };
+  return { damage: finalDamage, bonusDamage, multiplier, backAttack };
 }
 
 function hpRatio(combatant: Combatant): number {
@@ -570,6 +661,7 @@ function activateSkill(
       casterName: caster.unit.name,
       casterTeam: caster.team,
       casterTile: caster.tile,
+      casterFacing: caster.facing,
       skillId: skill.id,
       skillName: skill.name,
       targetIds: targets.map((target) => target.id),
@@ -596,6 +688,30 @@ function logsSkill(logs: string[], time: number, caster: Combatant, skill: Skill
   logs.push(
     `[${time.toFixed(2).padStart(6, '0')}] SKILL: ${caster.team}:${caster.unit.name} used ${skill.name} -> ${targetLabel} ${skill.effectType} ${totalApplied}`,
   );
+}
+
+function maybeRecordMove(
+  combatant: Combatant,
+  move: { fromTile: GridTile; toTile: GridTile; steps: number },
+  time: number,
+  context: SkillContext,
+) {
+  if (!context.recordReplay || move.steps <= 0 || time - combatant.lastMoveLogAt < MOVE_EVENT_INTERVAL - 0.001) return;
+  context.replayEvents.push({
+    id: `evt_${context.replayEvents.length}_${combatant.id}_move`,
+    index: context.replayEvents.length,
+    type: 'move',
+    time: round2(time),
+    unitId: combatant.id,
+    unitName: combatant.unit.name,
+    team: combatant.team,
+    fromPosition: move.fromTile.x,
+    toPosition: move.toTile.x,
+    fromTile: move.fromTile,
+    toTile: move.toTile,
+    facingAfter: combatant.facing,
+  });
+  combatant.lastMoveLogAt = time;
 }
 
 function triggerSkills(
@@ -694,6 +810,7 @@ function buildReplayUnits(combatants: Combatant[], data: AppData): BattleReplay[
     iconType: combatant.unit.iconType,
     initialTile: combatant.tile,
     initialPosition: combatant.tile.x,
+    initialFacing: combatant.facing,
   }));
 }
 
@@ -1031,12 +1148,25 @@ export function simulateBattle(
 
       const enemies = alive(combatants, actor.team === 'A' ? 'B' : 'A');
       if (enemies.length === 0) break;
-      const targetInRange = selectTargetInRange(actor, enemies);
+      let targetInRange = selectTargetInRange(actor, enemies);
+
+      if (targetInRange && hasTag(actor, '후방공격') && !isBackAttackFrom(actor.tile, targetInRange)) {
+        const move = chooseBackAttackTile(actor, targetInRange, combatants);
+        maybeRecordMove(actor, move, time, skillContext);
+        targetInRange = canAttackFrom(actor, actor.tile, targetInRange) ? targetInRange : selectTargetInRange(actor, enemies);
+      }
+
+      if (targetInRange && hasTag(actor, '무빙샷')) {
+        const move = chooseKiteTile(actor, targetInRange, combatants);
+        maybeRecordMove(actor, move, time, skillContext);
+        targetInRange = canAttackFrom(actor, actor.tile, targetInRange) ? targetInRange : selectTargetInRange(actor, enemies);
+      }
 
       if (targetInRange && time >= actor.nextAttackAt) {
         if (firstEngagementTime === undefined) firstEngagementTime = round2(time);
         const beforeShield = targetInRange.shield;
         const beforeHp = targetInRange.hp;
+        actor.facing = directionTo(actor.tile, targetInRange.tile, actor.facing);
         const damageResult = applyDamage(actor, targetInRange, data);
         const damage = damageResult.damage;
         const hpDelta = beforeHp - targetInRange.hp;
@@ -1055,17 +1185,20 @@ export function simulateBattle(
             attackerTeam: actor.team,
             attackerPosition: actor.tile.x,
             attackerTile: actor.tile,
+            attackerFacing: actor.facing,
             defenderId: targetInRange.id,
             defenderName: targetInRange.unit.name,
             defenderTeam: targetInRange.team,
             defenderPosition: targetInRange.tile.x,
             defenderTile: targetInRange.tile,
+            defenderFacing: targetInRange.facing,
             targetId: targetInRange.id,
             targetName: targetInRange.unit.name,
             damage,
             shieldDamage: shieldDelta,
             hpDamage: hpDelta,
             multiplier: damageResult.multiplier,
+            backAttack: damageResult.backAttack,
             attackType: actor.unit.attackType,
             defenseType: targetInRange.unit.defenseType,
             defenderHpAfter: targetInRange.hp,
@@ -1093,7 +1226,7 @@ export function simulateBattle(
 
         if (keepFullLog) {
           logs.push(
-            `[${time.toFixed(2).padStart(6, '0')}] ${actor.team}:${actor.unit.name}(${actor.tile.x},${actor.tile.y}) -> ${targetInRange.team}:${targetInRange.unit.name}(${targetInRange.tile.x},${targetInRange.tile.y}) DMG ${damage} x${damageResult.multiplier} (S-${shieldDelta}, HP-${hpDelta})`,
+            `[${time.toFixed(2).padStart(6, '0')}] ${actor.team}:${actor.unit.name}(${actor.tile.x},${actor.tile.y}) -> ${targetInRange.team}:${targetInRange.unit.name}(${targetInRange.tile.x},${targetInRange.tile.y}) DMG ${damage} x${damageResult.multiplier}${damageResult.backAttack ? ' BACK' : ''} (S-${shieldDelta}, HP-${hpDelta})`,
           );
         }
         handleDefeat(targetInRange, actor, combatants, data, time, skillContext);
@@ -1106,23 +1239,10 @@ export function simulateBattle(
 
       if (!targetInRange) {
         const closestEnemy = selectClosest(actor, enemies);
-        const { fromTile, toTile, steps } = chooseMoveTile(actor, closestEnemy, combatants);
-        if (recordReplay && steps > 0 && time - actor.lastMoveLogAt >= MOVE_EVENT_INTERVAL - 0.001) {
-          replayEvents.push({
-            id: `evt_${replayEvents.length}_${actor.id}_move`,
-            index: replayEvents.length,
-            type: 'move',
-            time: round2(time),
-            unitId: actor.id,
-            unitName: actor.unit.name,
-            team: actor.team,
-            fromPosition: fromTile.x,
-            toPosition: toTile.x,
-            fromTile,
-            toTile,
-          });
-          actor.lastMoveLogAt = time;
-        }
+        const move = hasTag(actor, '야포') && tileDistance(actor.tile, closestEnemy.tile) <= 1
+          ? chooseKiteTile(actor, closestEnemy, combatants)
+          : chooseMoveTile(actor, closestEnemy, combatants);
+        maybeRecordMove(actor, move, time, skillContext);
       }
     }
 

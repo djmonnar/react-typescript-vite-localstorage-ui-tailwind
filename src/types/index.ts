@@ -366,6 +366,8 @@ export interface GridTile {
   y: number;
 }
 
+export type Facing = 'N' | 'E' | 'S' | 'W';
+
 export interface BattleAnalysis {
   winnerName: string;
   firstEngagementTime?: number;
@@ -397,6 +399,7 @@ export interface BattleReplayUnit {
   iconType?: UnitIconType;
   initialTile?: GridTile;
   initialPosition?: number;
+  initialFacing?: Facing;
 }
 
 export interface BattleReplayBaseEvent {
@@ -422,6 +425,9 @@ export interface BattleReplayAttackEvent extends BattleReplayBaseEvent {
   shieldDamage: number;
   hpDamage: number;
   multiplier?: number;
+  backAttack?: boolean;
+  attackerFacing?: Facing;
+  defenderFacing?: Facing;
   attackType?: Id;
   defenseType?: Id;
   defenderHpAfter?: number;
@@ -443,6 +449,7 @@ export interface BattleReplayMoveEvent extends BattleReplayBaseEvent {
   toPosition: number;
   fromTile?: GridTile;
   toTile?: GridTile;
+  facingAfter?: Facing;
 }
 
 export interface BattleReplaySkillEvent extends BattleReplayBaseEvent {
@@ -451,6 +458,7 @@ export interface BattleReplaySkillEvent extends BattleReplayBaseEvent {
   casterName: string;
   casterTeam: 'A' | 'B';
   casterTile?: GridTile;
+  casterFacing?: Facing;
   skillId: Id;
   skillName: string;
   targetIds: Id[];
