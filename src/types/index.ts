@@ -86,6 +86,7 @@ export type SkillTrigger =
 export type SkillTarget =
   | 'self'
   | 'allyLowestHp'
+  | 'allyLowestHpInRange'
   | 'allAllies'
   | 'enemyTarget'
   | 'enemyLowestHp'

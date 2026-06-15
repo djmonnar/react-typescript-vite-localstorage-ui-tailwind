@@ -32,6 +32,7 @@ export const skillTriggerLabels: Record<SkillTrigger, string> = {
 export const skillTargetLabels: Record<SkillTarget, string> = {
   self: '자신',
   allyLowestHp: '체력이 가장 낮은 아군',
+  allyLowestHpInRange: '사거리 안에서 체력이 가장 낮은 아군',
   allAllies: '모든 아군',
   enemyTarget: '현재 공격 대상',
   enemyLowestHp: '체력이 가장 낮은 적',
@@ -80,6 +81,13 @@ export const skillAreaLabels: Record<NonNullable<Skill['area']>['type'], string>
   circle: '원형',
   cross: '십자',
 };
+
+export function skillAreaHelp(type: NonNullable<Skill['area']>['type']): string {
+  if (type === 'single') return '단일은 선택된 대상 1명에게만 적용됩니다. 반경과 길이는 사용하지 않습니다.';
+  if (type === 'circle') return '원형은 대상 주변으로 반경 n칸 안의 유닛에게 적용됩니다. 예: 반경 1은 대상 주변 1칸입니다.';
+  if (type === 'line') return '직선은 시전자 기준 일직선 n칸을 뜻합니다. 현재는 데이터 설정용이며 전투 적용은 제한적입니다.';
+  return '십자는 상하좌우 방향 범위를 뜻합니다. 반경은 퍼지는 칸 수, 길이는 뻗는 칸 수입니다. 현재는 데이터 설정용에 가깝습니다.';
+}
 
 export const conditionLogicLabels: Record<ConditionLogic, string> = {
   AND: '모든 조건 만족',

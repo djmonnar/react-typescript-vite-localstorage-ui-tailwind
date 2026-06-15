@@ -339,6 +339,10 @@ function getSkillTargets(
 
   if (skill.target === 'self') return filterTargets([caster]);
   if (skill.target === 'allyLowestHp') return filterTargets([...allies].sort((left, right) => hpRatio(left) - hpRatio(right))).slice(0, 1);
+  if (skill.target === 'allyLowestHpInRange') {
+    const candidates = allies.filter((ally) => ally.id !== caster.id && tileDistance(caster.tile, ally.tile) <= currentRange(caster));
+    return filterTargets(candidates.sort((left, right) => hpRatio(left) - hpRatio(right))).slice(0, 1);
+  }
   if (skill.target === 'allAllies') return filterTargets(allies);
   if (skill.target === 'enemyTarget') return filterTargets(currentTarget && currentTarget.hp > 0 ? [currentTarget] : []);
   if (skill.target === 'enemyLowestHp') return filterTargets([...enemies].sort((left, right) => hpRatio(left) - hpRatio(right))).slice(0, 1);

@@ -15,6 +15,7 @@ import {
   formatSkillAutoDescription,
   formatSkillShortLine,
   skillAreaLabels,
+  skillAreaHelp,
   skillEffectLabels,
   skillTargetLabels,
   skillTriggerLabels,
@@ -870,19 +871,26 @@ function SkillEditor({
               options={skillAreas}
               value={area.type}
             />
-            <NumberStepper
-              label="반경"
-              min={0}
-              onChange={(radius) => onUpdate({ area: { ...area, radius } })}
-              value={area.radius ?? 0}
-            />
-            <NumberStepper
-              label="길이"
-              min={0}
-              onChange={(length) => onUpdate({ area: { ...area, length } })}
-              value={area.length ?? 0}
-            />
+            {area.type === 'circle' || area.type === 'cross' ? (
+              <NumberStepper
+                label="반경"
+                min={0}
+                onChange={(radius) => onUpdate({ area: { ...area, radius } })}
+                value={area.radius ?? 0}
+              />
+            ) : null}
+            {area.type === 'line' || area.type === 'cross' ? (
+              <NumberStepper
+                label="길이"
+                min={0}
+                onChange={(length) => onUpdate({ area: { ...area, length } })}
+                value={area.length ?? 0}
+              />
+            ) : null}
           </div>
+          <p className="rounded-md border border-line bg-[#10151f] px-3 py-2 text-xs leading-relaxed text-muted">
+            {skillAreaHelp(area.type)}
+          </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <TextField
               label="스킬 태그"

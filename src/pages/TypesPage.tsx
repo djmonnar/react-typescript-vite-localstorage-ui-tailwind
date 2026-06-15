@@ -27,6 +27,7 @@ import { createId } from '../utils/ids';
 import {
   formatSkillAutoDescription,
   formatTraitPreview,
+  skillAreaHelp,
   skillAreaLabels,
   skillEffectLabels,
   skillTargetLabels,
@@ -788,9 +789,16 @@ function SkillTemplateSettings({
             <NumberStepper label="지속 시간" onChange={(duration) => onUpdate({ duration })} step={0.5} value={selectedSkill.duration} />
             <NumberStepper label="최대 발동 횟수" onChange={(maxActivations) => onUpdate({ maxActivations: maxActivations > 0 ? maxActivations : undefined })} value={selectedSkill.maxActivations ?? 0} />
             <SelectField label="영역" labels={skillAreaLabels} onChange={(type) => onUpdate({ area: { ...area, type: type as SkillArea['type'] } })} options={skillAreas} value={area.type} />
-            <NumberStepper label="반경" min={0} onChange={(radius) => onUpdate({ area: { ...area, radius } })} value={area.radius ?? 0} />
-            <NumberStepper label="길이" min={0} onChange={(length) => onUpdate({ area: { ...area, length } })} value={area.length ?? 0} />
+            {area.type === 'circle' || area.type === 'cross' ? (
+              <NumberStepper label="반경" min={0} onChange={(radius) => onUpdate({ area: { ...area, radius } })} value={area.radius ?? 0} />
+            ) : null}
+            {area.type === 'line' || area.type === 'cross' ? (
+              <NumberStepper label="길이" min={0} onChange={(length) => onUpdate({ area: { ...area, length } })} value={area.length ?? 0} />
+            ) : null}
           </div>
+          <p className="rounded-md border border-line bg-[#0f141d] px-3 py-2 text-xs leading-relaxed text-muted">
+            {skillAreaHelp(area.type)}
+          </p>
           <div>
             <span className="label">스킬 태그</span>
             <div className="flex flex-wrap gap-2">
