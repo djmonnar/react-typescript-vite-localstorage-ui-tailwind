@@ -404,6 +404,10 @@ export interface BattleReplayUnit {
   isHero: boolean;
   maxHp: number;
   maxShield: number;
+  attack?: number;
+  defense?: number;
+  range?: number;
+  unitCost?: number;
   attackType: Id;
   defenseType: Id;
   attackTypeName?: string;

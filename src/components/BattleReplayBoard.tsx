@@ -1,4 +1,4 @@
-import { Maximize2, Pause, Play, RotateCcw, SkipBack, X } from 'lucide-react';
+import { Activity, Maximize2, Pause, Play, RotateCcw, SkipBack, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { UnitIcon } from './UnitIcon';
 import type {
@@ -32,6 +32,19 @@ interface ReplayUnitState extends BattleReplayUnit {
 const SPEEDS = [0.5, 1, 2, 4] as const;
 const BASE_DELAY_MS = 650;
 
+interface BattlePowerSnapshot {
+  powerA: number;
+  powerB: number;
+  percentA: number;
+  percentB: number;
+  aliveA: number;
+  aliveB: number;
+  totalA: number;
+  totalB: number;
+  leader: 'A' | 'B' | 'even';
+  leadPercent: number;
+}
+
 export function BattleReplayBoard({ isFullscreen = false, onClose, replay }: BattleReplayBoardProps) {
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -45,6 +58,7 @@ export function BattleReplayBoard({ isFullscreen = false, onClose, replay }: Bat
   const unitStates = useMemo(() => buildReplayState(replay, step), [replay, step]);
   const selectedUnit = unitStates.find((unit) => unit.combatantId === selectedUnitId) ?? unitStates[0];
   const progress = events.length > 0 ? Math.round((step / events.length) * 100) : 0;
+  const battlePower = useMemo(() => calculateBattlePower(unitStates), [unitStates]);
 
   useEffect(() => {
     if (!playing) return undefined;
@@ -97,6 +111,13 @@ export function BattleReplayBoard({ isFullscreen = false, onClose, replay }: Bat
           </button>
         )}
       </div>
+
+      <BattlePowerPanel
+        factionAName={replay.factionAName}
+        factionBName={replay.factionBName}
+        isFullscreen={isFullscreen}
+        snapshot={battlePower}
+      />
 
       <div className="grid grid-cols-3 gap-2">
         <button className="btn" onClick={() => setPlaying((current) => !current)} type="button">
@@ -174,15 +195,20 @@ export function BattleReplayBoard({ isFullscreen = false, onClose, replay }: Bat
         </div>
       ) : null}
 
-      <div className={`rounded-md border border-line bg-[#070a10] ${isFullscreen ? 'p-3' : 'p-2'}`}>
-        <div className="mb-2 flex items-center justify-between font-mono text-[10px] font-bold text-muted">
+      <div
+        className={`relative overflow-hidden rounded-md border border-line bg-[#070a10] ${
+          isFullscreen ? 'p-3 shadow-[0_0_80px_rgba(102,217,239,0.12)]' : 'p-2'
+        }`}
+      >
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_50%,rgba(102,217,239,0.14),transparent_34%),radial-gradient(circle_at_82%_50%,rgba(255,91,122,0.13),transparent_34%)]" />
+        <div className="relative mb-2 flex items-center justify-between font-mono text-[10px] font-bold text-muted">
           <span>A 팩션 | {replay.factionAName}</span>
           <span className="text-cyan">{isFullscreen ? 'TACTICAL GRID LIVE' : '전투 맵'}</span>
           <span>B 팩션 | {replay.factionBName}</span>
         </div>
-        <div className={isFullscreen ? 'overflow-x-auto pb-2' : ''}>
+        <div className={`relative ${isFullscreen ? 'overflow-x-auto pb-2' : ''}`}>
           <div
-            className={`grid gap-1 ${isFullscreen ? 'min-w-[520px]' : ''}`}
+            className={`grid gap-1 rounded-md bg-[#03060a]/50 p-1 ${isFullscreen ? 'min-w-[520px]' : ''}`}
             style={{ gridTemplateColumns: `repeat(${gridWidth}, minmax(${isFullscreen ? '3rem' : '0'}, 1fr))` }}
           >
             {Array.from({ length: gridWidth * gridHeight }, (_, index) => {
@@ -238,6 +264,106 @@ export function BattleReplayBoard({ isFullscreen = false, onClose, replay }: Bat
         <BattleReplayBoard isFullscreen onClose={() => setExpanded(false)} replay={replay} />
       ) : null}
     </>
+  );
+}
+
+function calculateBattlePower(units: ReplayUnitState[]): BattlePowerSnapshot {
+  const totalA = units.filter((unit) => unit.team === 'A').length;
+  const totalB = units.filter((unit) => unit.team === 'B').length;
+  const aliveA = units.filter((unit) => unit.team === 'A' && !unit.dead).length;
+  const aliveB = units.filter((unit) => unit.team === 'B' && !unit.dead).length;
+  const powerA = Math.round(units.filter((unit) => unit.team === 'A').reduce((sum, unit) => sum + unitBattlePower(unit), 0));
+  const powerB = Math.round(units.filter((unit) => unit.team === 'B').reduce((sum, unit) => sum + unitBattlePower(unit), 0));
+  const totalPower = Math.max(1, powerA + powerB);
+  const percentA = Math.round((powerA / totalPower) * 100);
+  const percentB = 100 - percentA;
+  const leadPercent = Math.abs(percentA - percentB);
+  const leader = leadPercent < 6 ? 'even' : percentA > percentB ? 'A' : 'B';
+
+  return { aliveA, aliveB, leader, leadPercent, percentA, percentB, powerA, powerB, totalA, totalB };
+}
+
+function unitBattlePower(unit: ReplayUnitState): number {
+  if (unit.dead || unit.hp <= 0) return 0;
+  const maxDurability = Math.max(1, unit.maxHp + unit.maxShield * 0.7);
+  const currentDurability = Math.max(0, unit.hp + unit.shield * 0.7);
+  const durabilityRatio = Math.min(1, currentDurability / maxDurability);
+  const offense = (unit.attack ?? 0) * 8 + (unit.defense ?? 0) * 5 + (unit.range ?? 1) * 4;
+  const strategicValue = (unit.unitCost ?? 1) * 12 + (unit.isHero ? 70 : 0);
+
+  return currentDurability + (offense + strategicValue) * Math.max(0.25, durabilityRatio);
+}
+
+function BattlePowerPanel({
+  factionAName,
+  factionBName,
+  isFullscreen,
+  snapshot,
+}: {
+  factionAName: string;
+  factionBName: string;
+  isFullscreen: boolean;
+  snapshot: BattlePowerSnapshot;
+}) {
+  const leaderLabel =
+    snapshot.leader === 'even'
+      ? '접전'
+      : snapshot.leader === 'A'
+        ? `${factionAName} 우세`
+        : `${factionBName} 우세`;
+  const leaderColor = snapshot.leader === 'even' ? 'text-amber' : snapshot.leader === 'A' ? 'text-cyan' : 'text-danger';
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-md border border-line bg-[#080d15] ${
+        isFullscreen ? 'p-4 shadow-[inset_0_0_40px_rgba(255,255,255,0.03)]' : 'p-3'
+      }`}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(102,217,239,0.08),transparent_45%,rgba(255,91,122,0.08))]" />
+      <div className="relative mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="label">전투력 판세</p>
+          <p className={`flex items-center gap-2 text-sm font-black ${leaderColor}`}>
+            <Activity size={16} />
+            {leaderLabel}
+          </p>
+        </div>
+        <div className="text-right font-mono text-xs text-muted">
+          <p>A {snapshot.aliveA}/{snapshot.totalA} 생존</p>
+          <p>B {snapshot.aliveB}/{snapshot.totalB} 생존</p>
+        </div>
+      </div>
+
+      <div className="relative h-5 overflow-hidden rounded-full border border-line bg-[#03060a]">
+        <div
+          className="absolute inset-y-0 left-0 bg-gradient-to-r from-cyan/90 to-cyan/35 transition-all duration-500"
+          style={{ width: `${snapshot.percentA}%` }}
+        />
+        <div
+          className="absolute inset-y-0 right-0 bg-gradient-to-l from-danger/90 to-danger/35 transition-all duration-500"
+          style={{ width: `${snapshot.percentB}%` }}
+        />
+        <div className="absolute inset-y-0 left-1/2 w-px bg-ink/40" />
+        <div className="absolute inset-0 flex items-center justify-between px-3 font-mono text-[10px] font-black text-ink">
+          <span>{snapshot.percentA}%</span>
+          <span>{snapshot.percentB}%</span>
+        </div>
+      </div>
+
+      <div className={`relative mt-2 grid grid-cols-2 gap-2 ${isFullscreen ? 'text-sm' : 'text-xs'}`}>
+        <PowerStat label={factionAName} power={snapshot.powerA} team="A" />
+        <PowerStat label={factionBName} power={snapshot.powerB} team="B" />
+      </div>
+    </div>
+  );
+}
+
+function PowerStat({ label, power, team }: { label: string; power: number; team: 'A' | 'B' }) {
+  return (
+    <div className={`rounded-md border px-3 py-2 ${team === 'A' ? 'border-cyan/25 bg-cyan/10' : 'border-danger/25 bg-danger/10'}`}>
+      <p className="truncate text-xs font-bold text-muted">{label}</p>
+      <p className={`font-mono text-lg font-black ${team === 'A' ? 'text-cyan' : 'text-danger'}`}>{power}</p>
+    </div>
   );
 }
 
