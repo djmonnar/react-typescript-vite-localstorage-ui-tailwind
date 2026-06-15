@@ -160,16 +160,18 @@ export const traitTargetLabels: Record<TraitTarget, string> = {
 
 export const traitEffectV2Labels: Record<TraitEffectTypeV2, string> = {
   hpPercent: 'HP %',
+  hpFlat: '추가 체력',
   shieldPercent: '보호막 %',
+  shieldFlat: '추가 보호막',
   attackPercent: '공격력 %',
   defenseFlat: '방어력 고정값',
   moveSpeedPercent: '이동속도 %',
   moveSpeedFlat: '이동속도 고정값',
   rangeFlat: '사거리 고정값',
   attackSpeedPercent: '공격속도 %',
-  mpFlat: 'MP 고정값',
+  mpFlat: '추가 MP',
   skillCooldownPercent: '스킬 쿨타임 %',
-  unitCostDiscount: '유닛 코스트 할인',
+  unitCostDiscount: '구버전 코스트 할인',
 };
 
 export function teamLabel(team: 'A' | 'B'): string {

@@ -57,7 +57,9 @@ const panels: Array<{ id: SettingsPanel; label: string }> = [
 const tagCategories: UnitTagCategory[] = ['종족', '역할', '전투방식', '속성', '상태', '커스텀'];
 const traitTriggers = Object.keys(traitTriggerLabels) as TraitTrigger[];
 const traitTargets = Object.keys(traitTargetLabels) as TraitTarget[];
-const traitEffects = Object.keys(traitEffectV2Labels) as TraitEffectTypeV2[];
+const traitEffects = (Object.keys(traitEffectV2Labels) as TraitEffectTypeV2[]).filter(
+  (effect) => effect !== 'unitCostDiscount',
+);
 const skillTriggers = Object.keys(skillTriggerLabels) as SkillTrigger[];
 const skillTargets = Object.keys(skillTargetLabels) as SkillTarget[];
 const skillEffects = Object.keys(skillEffectLabels) as SkillEffectType[];
@@ -612,6 +614,9 @@ function TraitSettings({
   setSelectedPreset: (value: string) => void;
 }) {
   const effect = selectedTrait?.effectsV2?.[0] ?? { type: 'attackPercent' as TraitEffectTypeV2, value: 10 };
+  const editableEffect = (traitEffects as TraitEffectTypeV2[]).includes(effect.type)
+    ? effect
+    : { ...effect, type: 'attackPercent' as TraitEffectTypeV2 };
   const tags = data.unitTags.map((tag) => tag.name);
 
   const updateFilters = (patch: NonNullable<Trait['filters']>) => {
@@ -658,8 +663,8 @@ function TraitSettings({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <SelectField label="발동 조건" labels={traitTriggerLabels} onChange={(triggerV2) => onUpdate({ triggerV2: triggerV2 as TraitTrigger })} options={traitTriggers} value={selectedTrait.triggerV2 ?? 'battleStart'} />
             <SelectField label="대상" labels={traitTargetLabels} onChange={(targetV2) => onUpdate({ targetV2: targetV2 as TraitTarget })} options={traitTargets} value={selectedTrait.targetV2 ?? 'allAllies'} />
-            <SelectField label="효과 타입" labels={traitEffectV2Labels} onChange={(type) => onUpdate({ effectsV2: [{ ...effect, type: type as TraitEffectTypeV2 }] })} options={traitEffects} value={effect.type} />
-            <NumberStepper label="수치" min={-999} onChange={(value) => onUpdate({ effectsV2: [{ ...effect, value }] })} value={effect.value} />
+            <SelectField label="효과 타입" labels={traitEffectV2Labels} onChange={(type) => onUpdate({ effectsV2: [{ ...editableEffect, type: type as TraitEffectTypeV2 }] })} options={traitEffects} value={editableEffect.type} />
+            <NumberStepper label="수치" min={-999} onChange={(value) => onUpdate({ effectsV2: [{ ...editableEffect, value }] })} value={editableEffect.value} />
           </div>
           <div>
             <span className="label">태그 필터</span>

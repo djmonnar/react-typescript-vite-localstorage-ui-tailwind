@@ -69,6 +69,9 @@ export function getEffectiveUnit(unit: Unit, race: Race | undefined, data: AppDa
       if (effect.type === 'hpPercent') {
         base.effectiveHp *= 1 + effect.value / 100;
       }
+      if (effect.type === 'hpFlat') {
+        base.effectiveHp += effect.value;
+      }
       if (effect.type === 'attackPercent') {
         base.effectiveAttack *= 1 + effect.value / 100;
       }
@@ -80,6 +83,9 @@ export function getEffectiveUnit(unit: Unit, race: Race | undefined, data: AppDa
       }
       if (effect.type === 'shieldPercent') {
         base.effectiveShield *= 1 + effect.value / 100;
+      }
+      if (effect.type === 'shieldFlat') {
+        base.effectiveShield += effect.value;
       }
       if (effect.type === 'moveSpeedPercent') {
         base.effectiveMoveSpeed *= 1 + effect.value / 100;

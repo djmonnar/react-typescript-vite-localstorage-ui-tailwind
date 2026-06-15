@@ -47,7 +47,9 @@ export type TraitTarget =
 
 export type TraitEffectTypeV2 =
   | 'hpPercent'
+  | 'hpFlat'
   | 'shieldPercent'
+  | 'shieldFlat'
   | 'attackPercent'
   | 'defenseFlat'
   | 'moveSpeedPercent'
