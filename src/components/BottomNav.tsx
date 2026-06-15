@@ -16,7 +16,7 @@ const tabs: Array<{ key: TabKey; label: string; icon: typeof BookOpen }> = [
 
 export function BottomNav({ active, onChange }: BottomNavProps) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-[#0b0f16]/95 px-2 pb-2 pt-1 backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-[#0b0f16]/95 px-2 pt-1 backdrop-blur pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
       <div className="mx-auto grid max-w-3xl grid-cols-5 gap-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;

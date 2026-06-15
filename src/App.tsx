@@ -25,13 +25,13 @@ export function App() {
   );
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-[calc(6rem+env(safe-area-inset-bottom))]">
       <header className="sticky top-0 z-10 border-b border-line bg-[#0b0f16]/90 backdrop-blur">
         <div className="mx-auto max-w-3xl px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="font-mono text-xs font-semibold text-cyan">{pageTitle[tab]}</p>
-              <h1 className="mt-1 text-xl font-black text-ink">창작 팩션 전투 실험실</h1>
+              <h1 className="mt-1 text-xl font-black text-ink">팩션 전투 실험실</h1>
             </div>
             <div className="hidden rounded-md border border-line bg-panel px-3 py-2 font-mono text-xs text-muted sm:block">
               {counts}
