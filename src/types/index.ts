@@ -223,8 +223,9 @@ export interface Unit {
   skillsV2?: Skill[];
   unitCost: number;
   iconType: UnitIconType;
-  cost: number;
-  buildTime: number;
+  /** Legacy import/export fields kept for older localStorage data. New balancing uses unitCost. */
+  cost?: number;
+  buildTime?: number;
   notes: string;
   createdAt: string;
   updatedAt: string;

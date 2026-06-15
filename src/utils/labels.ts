@@ -127,7 +127,7 @@ export const legacyTraitEffectLabels: Record<TraitEffectType, string> = {
   allDefenseFlat: '모든 유닛 방어력 고정값',
   defenseTypeAttackPercent: '특정 방어타입 유닛 공격력 %',
   attackTypeAttackPercent: '특정 공격타입 유닛 공격력 %',
-  productionSpeedPercent: '생산속도 %',
+  productionSpeedPercent: '구버전 미사용 효과',
   moveSpeedPercent: '이동속도 %',
 };
 

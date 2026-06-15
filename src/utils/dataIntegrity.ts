@@ -50,9 +50,10 @@ export function normalizeData(data: AppData): AppData {
 }
 
 function normalizeUnit(unit: Unit): Unit {
+  const legacyCost = Number(unit.cost);
   return {
     ...unit,
-    unitCost: Math.max(1, Math.round(Number(unit.unitCost ?? unit.cost / 50) || 1)),
+    unitCost: Math.max(1, Math.round(Number(unit.unitCost ?? (Number.isFinite(legacyCost) ? legacyCost / 50 : 1)) || 1)),
     iconType: normalizeIconType(unit.iconType, unit),
     tags: Array.isArray(unit.tags) ? [...new Set(unit.tags.filter(Boolean))] : [],
     skillsV2: Array.isArray(unit.skillsV2) ? unit.skillsV2.map(normalizeSkill) : [],

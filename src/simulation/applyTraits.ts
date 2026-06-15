@@ -6,7 +6,6 @@ export interface EffectiveUnit extends Unit {
   effectiveAttack: number;
   effectiveDefense: number;
   effectiveMoveSpeed: number;
-  effectiveBuildTime: number;
 }
 
 function traitApplies(unit: Unit, trait: Trait): boolean {
@@ -41,7 +40,6 @@ export function getEffectiveUnit(unit: Unit, race: Race | undefined, data: AppDa
     effectiveAttack: unit.attack,
     effectiveDefense: unit.defense,
     effectiveMoveSpeed: unit.moveSpeed,
-    effectiveBuildTime: unit.buildTime,
   };
 
   const traits = data.traits.filter((trait) => race?.traitIds.includes(trait.id));
@@ -58,9 +56,6 @@ export function getEffectiveUnit(unit: Unit, race: Race | undefined, data: AppDa
       }
       if (trait.effectType === 'defenseTypeAttackPercent' || trait.effectType === 'attackTypeAttackPercent') {
         base.effectiveAttack *= 1 + trait.value / 100;
-      }
-      if (trait.effectType === 'productionSpeedPercent') {
-        base.effectiveBuildTime = Math.max(1, base.effectiveBuildTime / (1 + trait.value / 100));
       }
       if (trait.effectType === 'moveSpeedPercent') {
         base.effectiveMoveSpeed *= 1 + trait.value / 100;
@@ -108,7 +103,6 @@ export function getEffectiveUnit(unit: Unit, race: Race | undefined, data: AppDa
     effectiveAttack: Math.round(base.effectiveAttack * 10) / 10,
     effectiveDefense: Math.round(base.effectiveDefense * 10) / 10,
     effectiveMoveSpeed: Math.round(base.effectiveMoveSpeed * 100) / 100,
-    effectiveBuildTime: Math.round(base.effectiveBuildTime * 10) / 10,
     attackSpeed: Math.round(base.attackSpeed * 100) / 100,
   };
 }

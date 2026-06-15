@@ -743,7 +743,7 @@ function buildBalanceSuggestions(params: {
   } else if (winGap >= 30) {
     suggestions.push(`${params.winnerName} 승률이 크게 앞섭니다. 패배 팩션의 핵심 딜러 공격력이나 전열 생존력을 소폭 올려보세요.`);
   } else {
-    suggestions.push('승률 격차가 과하지 않습니다. 큰 수치 변경보다 상성 배율이나 생산 비용을 작게 조정하는 편이 좋습니다.');
+    suggestions.push('승률 격차가 과하지 않습니다. 큰 수치 변경보다 상성 배율이나 전투 코스트를 작게 조정하는 편이 좋습니다.');
   }
 
   if (typeof params.firstEngagementTime === 'number' && params.firstEngagementTime >= 8) {
@@ -753,13 +753,13 @@ function buildBalanceSuggestions(params: {
     suggestions.push(`${winnerSurvival.factionName} 생존율이 ${winnerSurvival.ratioPercent}%입니다. 압승을 줄이려면 해당 팩션의 방어력/보호막 또는 유닛 수를 낮춰보세요.`);
   }
   if (topShare && topShare.sharePercent >= 45) {
-    suggestions.push(`${topShare.name} 피해 비중이 ${topShare.sharePercent}%로 높습니다. 공격력, 공격속도, 사거리 중 하나를 낮추거나 비용을 올리는 조정이 적합합니다.`);
+    suggestions.push(`${topShare.name} 피해 비중이 ${topShare.sharePercent}%로 높습니다. 공격력, 공격속도, 사거리 중 하나를 낮추거나 전투 코스트를 올리는 조정이 적합합니다.`);
   }
   if (params.topAdvantagedAttackType && params.topAdvantagedAttackType.bonusDamage > 0) {
     suggestions.push(`${params.topAdvantagedAttackType.attackTypeName} 타입이 상성으로 +${params.topAdvantagedAttackType.bonusDamage} 피해를 얻었습니다. 해당 타입 배율이 의도보다 강한지 확인하세요.`);
   }
   if (topEfficiency && topEfficiency.totalCost > 0 && topEfficiency.efficiency >= 1.5) {
-    suggestions.push(`${topEfficiency.name}의 가격 대비 효율이 ${topEfficiency.efficiency}입니다. 비용 증가 또는 생산속도 증가로 효율을 맞출 수 있습니다.`);
+    suggestions.push(`${topEfficiency.name}의 코스트 대비 효율이 ${topEfficiency.efficiency}입니다. 전투 코스트를 올리거나 전투 능력치를 낮춰 효율을 맞출 수 있습니다.`);
   }
 
   return suggestions;

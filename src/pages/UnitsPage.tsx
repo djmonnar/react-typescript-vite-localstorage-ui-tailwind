@@ -107,8 +107,6 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
       skillsV2: [],
       unitCost: 1,
       iconType: 'sword',
-      cost: 50,
-      buildTime: 10,
       notes: '',
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -485,12 +483,8 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
             </div>
           </FormSection>
 
-          <FormSection title="생산 / 스킬">
-            <div className="grid grid-cols-2 gap-3">
-              <NumberStepper label="생산가격" onChange={(cost) => updateUnit({ cost })} value={selectedUnit.cost} />
-              <NumberStepper label="생산속도" onChange={(buildTime) => updateUnit({ buildTime })} value={selectedUnit.buildTime} />
-            </div>
-            <div className="mt-3">
+          <FormSection title="스킬">
+            <div>
               <TextField label="특수기술 메모" multiline onChange={(skills) => updateUnit({ skills })} value={selectedUnit.skills} />
             </div>
             <SkillSection

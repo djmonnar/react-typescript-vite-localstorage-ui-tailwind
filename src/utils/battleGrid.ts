@@ -28,7 +28,8 @@ export function deploymentTiles(team: 'A' | 'B'): GridTile[] {
 }
 
 export function clampUnitCost(unit: Pick<Unit, 'cost' | 'unitCost'>): number {
-  return Math.max(1, Math.round(unit.unitCost ?? unit.cost / 50));
+  const legacyCost = Number(unit.cost);
+  return Math.max(1, Math.round(unit.unitCost ?? (Number.isFinite(legacyCost) ? legacyCost / 50 : 1)));
 }
 
 export function deploymentCost(deployment: DeployedUnit[] | undefined, units: Unit[]): number {

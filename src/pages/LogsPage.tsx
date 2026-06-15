@@ -196,12 +196,12 @@ function AnalysisReport({ analysis }: { analysis: NonNullable<AppData['lastResul
         {analysis.typeAdvantages.length === 0 ? <p className="text-sm text-muted">상성 이득 데이터가 없습니다.</p> : null}
       </ReportBlock>
 
-      <ReportBlock title="가격 대비 효율">
+      <ReportBlock title="코스트 대비 효율">
         {analysis.costEfficiency.slice(0, 5).map((entry) => (
           <div className="flex items-center justify-between rounded-md border border-line bg-[#0f141d] px-3 py-2" key={entry.unitId}>
             <span className="text-sm text-ink">{entry.name}</span>
             <span className="font-mono text-xs text-amber">
-              비용 1당 피해 {entry.efficiency} · 총비용 {entry.totalCost}
+              코스트 1당 피해 {entry.efficiency} · 총코스트 {entry.totalCost}
             </span>
           </div>
         ))}
