@@ -21,6 +21,8 @@ import {
   skillTriggerLabels,
   skillValueTypeLabels,
 } from '../utils/labels';
+import { getTagPersonality } from '../utils/tagPersonalities';
+import type { TagPersonality } from '../utils/tagPersonalities';
 import { unitIconLabels, unitIconTypes } from '../utils/unitIconOptions';
 
 interface UnitsPageProps {
@@ -47,7 +49,7 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
   const selectedUnit = factionUnits.find((candidate) => candidate.id === selectedUnitId) ?? factionUnits[0];
   const availableTags = useMemo(() => {
     const customTags = data.units.flatMap((unit) => unit.tags ?? []);
-    return [...new Set([...data.unitTags.map((tag) => tag.name), ...customTags])];
+    return [...new Set([...data.unitTags.map((tag) => tag.name), ...customTags].map((tag) => tag.trim()).filter(Boolean))];
   }, [data.unitTags, data.units]);
 
   useEffect(() => {
@@ -564,12 +566,20 @@ function TagEditor({
   selectedTags: string[];
   tagInput: string;
 }) {
+  const selectedPersonalities = selectedTags
+    .map(getTagPersonality)
+    .filter((personality): personality is TagPersonality => Boolean(personality));
+
   return (
     <div className="rounded-md border border-line bg-[#0f141d] p-3">
       <h5 className="mb-3 text-sm font-bold text-cyan">태그</h5>
+      <p className="mb-3 text-xs leading-5 text-muted">
+        태그는 특성/스킬 조건에 쓰입니다. <span className="text-cyan">개성</span> 표시가 붙은 태그는 전투 AI 행동도 바꿉니다.
+      </p>
       <div className="flex flex-wrap gap-2">
         {availableTags.map((tag) => {
           const checked = selectedTags.includes(tag);
+          const personality = getTagPersonality(tag);
           return (
             <button
               className={`min-h-11 rounded-md border px-3 py-2 text-sm font-semibold ${
@@ -580,10 +590,21 @@ function TagEditor({
               type="button"
             >
               {tag}
+              {personality ? <span className="ml-2 text-[10px] text-cyan">개성</span> : null}
             </button>
           );
         })}
       </div>
+      {selectedPersonalities.length > 0 ? (
+        <div className="mt-3 space-y-2 rounded-md border border-cyan/30 bg-cyan/10 p-3">
+          <p className="text-xs font-bold text-cyan">적용 중인 태그 개성</p>
+          {selectedPersonalities.map((personality) => (
+            <p className="text-xs leading-5 text-muted" key={personality.name}>
+              <span className="font-bold text-ink">{personality.name}</span>: {personality.battleRule}
+            </p>
+          ))}
+        </div>
+      ) : null}
       <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
         <input
           className="field"

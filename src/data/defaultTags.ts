@@ -1,4 +1,5 @@
 import type { UnitTag, UnitTagCategory } from '../types';
+import { getTagPersonality } from '../utils/tagPersonalities';
 
 export const defaultUnitTags = [
   '기계',
@@ -57,19 +58,14 @@ const colorByCategory: Record<UnitTagCategory, string> = {
   커스텀: '#a9b1d6',
 };
 
-const descriptionByTag: Record<string, string> = {
-  후방공격: '가능하면 적의 등 뒤를 노려 이동하고, 등 뒤에서 공격하면 피해가 50% 증가합니다.',
-  무빙샷: '사거리 안에서 공격할 수 있으면 가능한 한 거리를 벌리며 싸웁니다.',
-  야포: '인접한 적은 공격할 수 없습니다. 가까이 붙은 적이 있으면 물러나서 사격하려고 합니다.',
-};
-
 export function createDefaultUnitTags(): UnitTag[] {
   return defaultUnitTags.map((name) => {
     const category = categoryByTag[name] ?? '커스텀';
+    const personality = getTagPersonality(name);
     return {
       id: `tag_${name}`,
       name,
-      description: descriptionByTag[name] ?? `${name} 태그`,
+      description: personality?.battleRule ?? `${name} 태그`,
       category,
       color: colorByCategory[category],
       notes: '',

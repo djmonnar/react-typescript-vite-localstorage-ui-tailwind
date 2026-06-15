@@ -1,4 +1,4 @@
-import type { AppData, BattlePreset, SkillCondition, SkillConditionType, Trait, TypeMatrix, Unit, UnitIconType } from '../types';
+import type { AppData, BattlePreset, SkillCondition, SkillConditionType, Trait, TypeMatrix, Unit, UnitIconType, UnitTag } from '../types';
 import { createDefaultUnitTags } from '../data/defaultTags';
 import { createSkillFromPreset, skillPresets } from '../data/presets';
 import { DEFAULT_MAX_COST, deploymentFromArmy, normalizeDeployment } from './battleGrid';
@@ -130,9 +130,20 @@ function normalizeSkillConditionType(type: SkillConditionType | undefined): Skil
 function normalizeUnitTags(unitTags: AppData['unitTags'] | undefined, units: Unit[]) {
   const defaults = createDefaultUnitTags();
   const byName = new Map(defaults.map((tag) => [tag.name, tag]));
+  const unnamedTags: UnitTag[] = [];
 
   for (const tag of unitTags ?? []) {
-    if (!tag.name?.trim()) continue;
+    if (!tag.name?.trim()) {
+      unnamedTags.push({
+        id: tag.id || `tag_unnamed_${unnamedTags.length}`,
+        name: '',
+        description: tag.description ?? '',
+        category: tag.category ?? '커스텀',
+        color: tag.color ?? '#a9b1d6',
+        notes: tag.notes ?? '',
+      });
+      continue;
+    }
     const defaultTag = byName.get(tag.name);
     byName.set(tag.name, {
       id: tag.id || `tag_${tag.name}`,
@@ -156,7 +167,7 @@ function normalizeUnitTags(unitTags: AppData['unitTags'] | undefined, units: Uni
     });
   }
 
-  return [...byName.values()];
+  return [...byName.values(), ...unnamedTags];
 }
 
 function normalizePreset(preset: BattlePreset, unitIds: Set<string>): BattlePreset {

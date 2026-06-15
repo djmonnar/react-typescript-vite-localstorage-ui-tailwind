@@ -37,6 +37,7 @@ import {
   traitTargetLabels,
   traitTriggerLabels,
 } from '../utils/labels';
+import { getTagPersonality, tacticalTagPersonalities } from '../utils/tagPersonalities';
 import { unitIconLabels, unitIconTypes } from '../utils/unitIconOptions';
 
 interface TypesPageProps {
@@ -152,7 +153,7 @@ export function TypesPage({ data, setData }: TypesPageProps) {
     const id = createId('tag');
     setData((current) => ({
       ...current,
-      unitTags: [...current.unitTags, { id, name: '새 태그', description: '', category: '커스텀', color: '#a9b1d6', notes: '' }],
+      unitTags: [...current.unitTags, { id, name: '', description: '', category: '커스텀', color: '#a9b1d6', notes: '' }],
     }));
     setTagId(id);
   };
@@ -452,6 +453,22 @@ export function TypesPage({ data, setData }: TypesPageProps) {
               <Plus size={16} />태그 추가
             </button>
           </div>
+          <div className="rounded-md border border-cyan/30 bg-cyan/10 p-3">
+            <p className="text-sm font-bold text-cyan">전투 개성 태그</p>
+            <p className="mt-1 text-xs leading-5 text-muted">
+              아래 이름의 태그를 유닛에 붙이면 전투 AI가 해당 규칙을 사용합니다. 커스텀 태그는 조건/필터용으로 쓰이고,
+              전투 개성은 이 목록의 정확한 태그 이름에 연결됩니다.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {tacticalTagPersonalities.map((personality) => (
+                <div className="rounded-md border border-line bg-[#0b0f16]/70 p-3" key={personality.name}>
+                  <p className="text-sm font-bold text-ink">{personality.name}</p>
+                  <p className="mt-1 text-xs font-semibold text-cyan">{personality.summary}</p>
+                  <p className="mt-2 text-xs leading-5 text-muted">{personality.battleRule}</p>
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_160px]">
             <input className="field" onChange={(event) => setTagSearch(event.target.value)} placeholder="태그 검색" value={tagSearch} />
             <select className="field" onChange={(event) => setTagCategoryFilter(event.target.value as UnitTagCategory | '전체')} value={tagCategoryFilter}>
@@ -460,22 +477,37 @@ export function TypesPage({ data, setData }: TypesPageProps) {
             </select>
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {filteredTags.map((tag) => (
-              <button
-                className={`shrink-0 rounded-md border px-3 py-2 text-sm font-semibold ${selectedTag?.id === tag.id ? 'border-cyan bg-cyan/15 text-cyan' : 'border-line bg-[#0f141d] text-muted'}`}
-                key={tag.id}
-                onClick={() => setTagId(tag.id)}
-                type="button"
-              >
-                <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: tag.color ?? '#a9b1d6' }} />
-                {tag.name}
-              </button>
-            ))}
+            {filteredTags.map((tag) => {
+              const personality = getTagPersonality(tag.name);
+              return (
+                <button
+                  className={`shrink-0 rounded-md border px-3 py-2 text-sm font-semibold ${selectedTag?.id === tag.id ? 'border-cyan bg-cyan/15 text-cyan' : 'border-line bg-[#0f141d] text-muted'}`}
+                  key={tag.id}
+                  onClick={() => setTagId(tag.id)}
+                  type="button"
+                >
+                  <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: tag.color ?? '#a9b1d6' }} />
+                  {tag.name || '이름 없는 태그'}
+                  {personality ? <span className="ml-2 text-[10px] text-cyan">개성</span> : null}
+                </button>
+              );
+            })}
           </div>
           {selectedTag ? (
             <div className="space-y-3 rounded-md border border-line bg-[#10151f] p-3">
-              <TextField label="태그 이름" onChange={(name) => updateTag({ name })} value={selectedTag.name} />
+              <TextField label="태그 이름" onChange={(name) => updateTag({ name })} placeholder="예: 후방공격" value={selectedTag.name} />
               <TextField label="설명" multiline onChange={(description) => updateTag({ description })} value={selectedTag.description} />
+              {getTagPersonality(selectedTag.name) ? (
+                <div className="rounded-md border border-cyan/30 bg-cyan/10 p-3">
+                  <p className="text-sm font-bold text-cyan">이 태그의 전투 개성</p>
+                  <p className="mt-1 text-sm text-ink">{getTagPersonality(selectedTag.name)?.summary}</p>
+                  <p className="mt-2 text-xs leading-5 text-muted">{getTagPersonality(selectedTag.name)?.battleRule}</p>
+                </div>
+              ) : (
+                <div className="rounded-md border border-line bg-[#0b0f16] p-3 text-xs leading-5 text-muted">
+                  이 태그는 현재 전투 AI 개성이 없는 일반 태그입니다. 스킬 조건, 특성 필터, 유닛 분류에 사용할 수 있습니다.
+                </div>
+              )}
               <label className="block">
                 <span className="label">카테고리</span>
                 <select className="field" onChange={(event) => updateTag({ category: event.target.value as UnitTagCategory })} value={selectedTag.category}>
