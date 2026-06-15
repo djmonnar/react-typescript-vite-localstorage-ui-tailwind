@@ -1,6 +1,7 @@
 import { Download, RotateCcw, Upload } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
+import { BattleReplayBoard } from '../components/BattleReplayBoard';
 import { SectionHeader } from '../components/SectionHeader';
 import type { AppData, SimulationSummary } from '../types';
 import { exportData, importData } from '../utils/exportImport';
@@ -63,6 +64,7 @@ export function LogsPage({ data, setData, replaceData, resetData }: LogsPageProp
             <p className="label">MVP</p>
             <p className="text-lg font-bold text-amber">{result.mvpUnit}</p>
           </div>
+          {result.replay ? <BattleReplayBoard replay={result.replay} /> : null}
           {result.analysis ? <AnalysisReport analysis={result.analysis} /> : null}
           <div>
             <p className="label">평균/총 피해량</p>

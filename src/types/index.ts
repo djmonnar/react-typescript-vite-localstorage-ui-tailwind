@@ -149,6 +149,43 @@ export interface BattleAnalysis {
   balanceSuggestions: string[];
 }
 
+export interface BattleReplayUnit {
+  combatantId: Id;
+  unitId: Id;
+  name: string;
+  role: string;
+  team: 'A' | 'B';
+  isHero: boolean;
+  maxHp: number;
+  maxShield: number;
+  attackType: Id;
+  defenseType: Id;
+}
+
+export interface BattleReplayEvent {
+  id: Id;
+  index: number;
+  time: number;
+  attackerId: Id;
+  attackerName: string;
+  targetId: Id;
+  targetName: string;
+  damage: number;
+  shieldDamage: number;
+  hpDamage: number;
+  targetHpAfter: number;
+  targetShieldAfter: number;
+  killed: boolean;
+}
+
+export interface BattleReplay {
+  factionAName: string;
+  factionBName: string;
+  duration: number;
+  units: BattleReplayUnit[];
+  events: BattleReplayEvent[];
+}
+
 export interface BattleResult {
   winner: 'A' | 'B' | 'Draw';
   factionAName?: string;
@@ -161,6 +198,7 @@ export interface BattleResult {
   battleTime: number;
   logs: string[];
   analysis?: BattleAnalysis;
+  replay?: BattleReplay;
 }
 
 export interface SimulationSummary extends BattleResult {

@@ -3,6 +3,8 @@ import type {
   ArmyEntry,
   BattleAnalysis,
   BattlePreset,
+  BattleReplay,
+  BattleReplayEvent,
   CostEfficiency,
   SimulationSummary,
   TypeAdvantageReport,
@@ -165,6 +167,21 @@ function collectArmyStats(combatants: Combatant[]): ArmyStats {
   }
 
   return { initialA, initialB, unitCounts, unitCosts };
+}
+
+function buildReplayUnits(combatants: Combatant[]): BattleReplay['units'] {
+  return combatants.map((combatant) => ({
+    combatantId: combatant.id,
+    unitId: combatant.unit.id,
+    name: combatant.unit.name,
+    role: combatant.unit.role,
+    team: combatant.team,
+    isHero: combatant.unit.isHero,
+    maxHp: combatant.unit.effectiveHp,
+    maxShield: combatant.unit.effectiveShield,
+    attackType: combatant.unit.attackType,
+    defenseType: combatant.unit.defenseType,
+  }));
 }
 
 function round1(value: number): number {
@@ -411,6 +428,8 @@ export function simulateBattle(data: AppData, preset: BattlePreset, keepFullLog 
   const factionBName = data.races.find((race) => race.id === preset.raceBId)?.name ?? 'B';
   const combatants = [...expandArmy(data, preset.armyA, 'A'), ...expandArmy(data, preset.armyB, 'B')];
   const armyStats = collectArmyStats(combatants);
+  const replayUnits = buildReplayUnits(combatants);
+  const replayEvents: BattleReplayEvent[] = [];
   const typeAdvantages = new Map<string, TypeAdvantageReport>();
   const logs: string[] = [`[00.00] SIM: ${preset.name} 교전 시작`];
   let time = 0;
@@ -431,6 +450,23 @@ export function simulateBattle(data: AppData, preset: BattlePreset, keepFullLog 
     const hpDelta = beforeHp - target.hp;
     const shieldDelta = beforeShield - target.shield;
     const typeAdvantage = typeAdvantages.get(actor.unit.attackType);
+    const killed = target.hp <= 0;
+
+    replayEvents.push({
+      id: `evt_${replayEvents.length}_${actor.id}_${target.id}`,
+      index: replayEvents.length,
+      time: Number(time.toFixed(2)),
+      attackerId: actor.id,
+      attackerName: actor.unit.name,
+      targetId: target.id,
+      targetName: target.unit.name,
+      damage,
+      shieldDamage: shieldDelta,
+      hpDamage: hpDelta,
+      targetHpAfter: target.hp,
+      targetShieldAfter: target.shield,
+      killed,
+    });
 
     if (typeAdvantage) {
       typeAdvantage.bonusDamage += damageResult.bonusDamage;
@@ -452,7 +488,7 @@ export function simulateBattle(data: AppData, preset: BattlePreset, keepFullLog 
       );
     }
 
-    if (target.hp <= 0) {
+    if (killed) {
       logs.push(`[${time.toFixed(2).padStart(6, '0')}] DOWN: ${target.team}:${target.unit.name}`);
     }
 
@@ -492,6 +528,13 @@ export function simulateBattle(data: AppData, preset: BattlePreset, keepFullLog 
     battleTime,
     logs,
     analysis,
+    replay: {
+      factionAName,
+      factionBName,
+      duration: battleTime,
+      units: replayUnits,
+      events: replayEvents,
+    },
   };
 }
 
