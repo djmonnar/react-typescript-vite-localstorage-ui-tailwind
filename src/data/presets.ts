@@ -248,6 +248,8 @@ export function createSkillFromPreset(preset: SkillPreset): Skill {
     maxActivations: preset.maxActivations,
     tags: preset.tags ?? [],
     area: { type: 'single' },
+    conditionLogic: 'AND',
+    conditions: [{ id: createId('condition'), type: 'always' }],
     notes: '',
   };
 }

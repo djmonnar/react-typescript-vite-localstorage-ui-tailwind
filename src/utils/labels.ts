@@ -1,8 +1,11 @@
 import type {
   AppData,
   BattleReplaySkillEvent,
+  ConditionLogic,
   PassiveTraitEffectType,
   Skill,
+  SkillCondition,
+  SkillConditionType,
   SkillEffectType,
   SkillTarget,
   SkillTrigger,
@@ -76,6 +79,46 @@ export const skillAreaLabels: Record<NonNullable<Skill['area']>['type'], string>
   line: '직선',
   circle: '원형',
   cross: '십자',
+};
+
+export const conditionLogicLabels: Record<ConditionLogic, string> = {
+  AND: '모든 조건 만족',
+  OR: '조건 중 하나 만족',
+};
+
+export const conditionCompareLabels: Record<NonNullable<SkillCondition['compare']>, string> = {
+  lt: '미만',
+  lte: '이하',
+  gt: '초과',
+  gte: '이상',
+  eq: '같음',
+};
+
+export const conditionTargetSideLabels: Record<NonNullable<SkillCondition['targetSide']>, string> = {
+  self: '자신',
+  ally: '아군',
+  enemy: '적',
+};
+
+export const skillConditionTypeLabels: Record<SkillConditionType, string> = {
+  always: '항상',
+  selfHpBelow: '자신 HP 이하',
+  selfHpAbove: '자신 HP 이상',
+  selfMpAbove: '자신 MP 이상',
+  allyHpBelow: 'HP가 낮은 아군 존재',
+  enemyHpBelow: 'HP가 낮은 적 존재',
+  enemyInRange: '사거리 안 적 존재',
+  allyInRange: '범위 안 아군 존재',
+  enemyCountInRadius: '주위 적 수',
+  allyCountInRadius: '주위 아군 수',
+  enemyInLine: '일직선 적 존재',
+  allyInLine: '일직선 아군 존재',
+  targetHasTag: '현재 대상 태그',
+  allyHasTag: '아군 태그 존재',
+  enemyHasTag: '적 태그 존재',
+  heroAlive: '영웅 생존',
+  shieldBelow: '보호막 이하',
+  noShieldAllyExists: '보호막 없는 아군 존재',
 };
 
 export const legacyTraitEffectLabels: Record<TraitEffectType, string> = {
@@ -155,6 +198,40 @@ export function formatSkillAutoDescription(skill: Skill): string {
   if (skill.effectType === 'mpRestore') return `${trigger} ${target}의 MP를 ${value} 회복합니다.`;
   if (skill.effectType === 'removeShield') return `${trigger} ${target}의 보호막을 ${value} 제거합니다.`;
   return `${trigger} ${chance}${target}에게 ${effect} ${value} 효과를${duration} 부여합니다.`;
+}
+
+export function formatSkillCondition(condition: SkillCondition): string {
+  const value = condition.value ?? 0;
+  const radius = condition.radius ?? condition.range ?? 1;
+  const count = condition.count ?? 1;
+  const tags = condition.tags?.length ? condition.tags.join(', ') : '선택 태그';
+  const compare = conditionCompareLabels[condition.compare ?? 'lte'];
+
+  if (condition.type === 'always') return '항상 사용할 수 있습니다.';
+  if (condition.type === 'selfHpBelow') return `자신 HP가 ${value}% ${compare}일 때`;
+  if (condition.type === 'selfHpAbove') return `자신 HP가 ${value}% ${compare}일 때`;
+  if (condition.type === 'selfMpAbove') return `자신 MP가 ${value} ${compare}일 때`;
+  if (condition.type === 'allyHpBelow') return `HP가 ${value}% ${compare}인 아군이 있을 때`;
+  if (condition.type === 'enemyHpBelow') return `HP가 ${value}% ${compare}인 적이 있을 때`;
+  if (condition.type === 'enemyInRange') return `${radius}칸 안에 적이 있을 때`;
+  if (condition.type === 'allyInRange') return `${radius}칸 안에 아군이 있을 때`;
+  if (condition.type === 'enemyCountInRadius') return `주위 ${radius}칸 안 적이 ${count}명 이상일 때`;
+  if (condition.type === 'allyCountInRadius') return `주위 ${radius}칸 안 아군이 ${count}명 이상일 때`;
+  if (condition.type === 'enemyInLine') return `${radius}칸 일직선에 적이 있을 때`;
+  if (condition.type === 'allyInLine') return `${radius}칸 일직선에 아군이 있을 때`;
+  if (condition.type === 'targetHasTag') return `현재 대상에게 ${tags} 태그가 있을 때`;
+  if (condition.type === 'allyHasTag') return `${tags} 태그 아군이 있을 때`;
+  if (condition.type === 'enemyHasTag') return `${tags} 태그 적이 있을 때`;
+  if (condition.type === 'heroAlive') return '아군 영웅이 살아있을 때';
+  if (condition.type === 'shieldBelow') return `${conditionTargetSideLabels[condition.targetSide ?? 'self']} 보호막이 ${value} ${compare}일 때`;
+  if (condition.type === 'noShieldAllyExists') return '보호막이 없는 아군이 있을 때';
+  return skillConditionTypeLabels[condition.type];
+}
+
+export function formatSkillConditions(skill: Skill): string {
+  const conditions = skill.conditions?.length ? skill.conditions : [{ id: 'preview_always', type: 'always' as const }];
+  const joiner = skill.conditionLogic === 'OR' ? ' 또는 ' : ' 그리고 ';
+  return `${conditionLogicLabels[skill.conditionLogic ?? 'AND']}: ${conditions.map(formatSkillCondition).join(joiner)}`;
 }
 
 export function formatSkillShortLine(skill: Skill): string {

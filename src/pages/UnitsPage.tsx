@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { JsonPreview } from '../components/JsonPreview';
 import { NumberStepper } from '../components/NumberStepper';
 import { SectionHeader } from '../components/SectionHeader';
+import { SkillConditionBuilder } from '../components/SkillConditionBuilder';
 import { TextField } from '../components/TextField';
 import { UnitIcon } from '../components/UnitIcon';
 import { createSkillFromPreset, skillPresets } from '../data/presets';
@@ -493,6 +494,7 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
               <TextField label="특수기술 메모" multiline onChange={(skills) => updateUnit({ skills })} value={selectedUnit.skills} />
             </div>
             <SkillSection
+              availableTags={availableTags}
               selectedSkillPreset={selectedSkillPreset}
               selectedSkillTemplateId={selectedSkillTemplateId}
               setSelectedSkillPreset={setSelectedSkillPreset}
@@ -594,6 +596,7 @@ function TagEditor({
 }
 
 function SkillSection({
+  availableTags,
   onAddSkill,
   onAddSkillPreset,
   onAddSkillTemplate,
@@ -607,6 +610,7 @@ function SkillSection({
   skillTemplates,
   skills,
 }: {
+  availableTags: string[];
   selectedSkillPreset: string;
   selectedSkillTemplateId: string;
   setSelectedSkillPreset: (value: string) => void;
@@ -665,6 +669,7 @@ function SkillSection({
       </div>
       {skills.map((skill) => (
         <SkillEditor
+          availableTags={availableTags}
           key={skill.id}
           onDelete={() => onDeleteSkill(skill.id)}
           onDuplicate={() => onDuplicateSkill(skill)}
@@ -696,11 +701,13 @@ function FormSection({ title, children }: { title: string; children: ReactNode }
 }
 
 function SkillEditor({
+  availableTags,
   onDelete,
   onDuplicate,
   onUpdate,
   skill,
 }: {
+  availableTags: string[];
   onDelete: () => void;
   onDuplicate: () => void;
   onUpdate: (patch: Partial<Skill>) => void;
@@ -814,6 +821,7 @@ function SkillEditor({
             />
             <TextField label="스킬 메모" onChange={(notes) => onUpdate({ notes })} value={skill.notes} />
           </div>
+          <SkillConditionBuilder availableTags={availableTags} onUpdate={onUpdate} skill={skill} />
           <pre className="max-h-60 overflow-auto rounded-md border border-line bg-[#05070a] p-3 font-mono text-[10px] leading-relaxed text-acid">
             {JSON.stringify(skill, null, 2)}
           </pre>

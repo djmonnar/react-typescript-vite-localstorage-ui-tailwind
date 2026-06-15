@@ -1,4 +1,4 @@
-import type { AppData, BattlePreset, Trait, TypeMatrix, Unit, UnitIconType } from '../types';
+import type { AppData, BattlePreset, SkillCondition, SkillConditionType, Trait, TypeMatrix, Unit, UnitIconType } from '../types';
 import { createDefaultUnitTags } from '../data/defaultTags';
 import { createSkillFromPreset, skillPresets } from '../data/presets';
 import { DEFAULT_MAX_COST, deploymentFromArmy, normalizeDeployment } from './battleGrid';
@@ -77,7 +77,51 @@ function normalizeSkill(skill: Unit['skillsV2'] extends Array<infer T> | undefin
     duration: Number(skill.duration) || 0,
     tags: Array.isArray(skill.tags) ? [...new Set(skill.tags.filter(Boolean))] : [],
     area: skill.area ?? { type: 'single' as const },
+    conditionLogic: skill.conditionLogic ?? 'AND',
+    conditions: normalizeSkillConditions(skill),
   };
+}
+
+function normalizeSkillConditions(skill: Unit['skillsV2'] extends Array<infer T> | undefined ? T : never): SkillCondition[] {
+  const source = Array.isArray(skill.conditions) && skill.conditions.length > 0
+    ? skill.conditions
+    : [{ id: `${skill.id}_condition_always`, type: 'always' as const }];
+
+  return source.map((condition, index) => ({
+    id: condition.id || `${skill.id}_condition_${index}`,
+    type: normalizeSkillConditionType(condition.type),
+    value: Number.isFinite(Number(condition.value)) ? Number(condition.value) : undefined,
+    radius: Number.isFinite(Number(condition.radius)) ? Math.max(0, Number(condition.radius)) : undefined,
+    range: Number.isFinite(Number(condition.range)) ? Math.max(0, Number(condition.range)) : undefined,
+    count: Number.isFinite(Number(condition.count)) ? Math.max(0, Number(condition.count)) : undefined,
+    tags: Array.isArray(condition.tags) ? [...new Set(condition.tags.filter(Boolean))] : [],
+    compare: condition.compare,
+    targetSide: condition.targetSide ?? 'self',
+  }));
+}
+
+function normalizeSkillConditionType(type: SkillConditionType | undefined): SkillConditionType {
+  const allowed: SkillConditionType[] = [
+    'always',
+    'selfHpBelow',
+    'selfHpAbove',
+    'selfMpAbove',
+    'allyHpBelow',
+    'enemyHpBelow',
+    'enemyInRange',
+    'allyInRange',
+    'enemyCountInRadius',
+    'allyCountInRadius',
+    'enemyInLine',
+    'allyInLine',
+    'targetHasTag',
+    'allyHasTag',
+    'enemyHasTag',
+    'heroAlive',
+    'shieldBelow',
+    'noShieldAllyExists',
+  ];
+  return type && allowed.includes(type) ? type : 'always';
 }
 
 function normalizeUnitTags(unitTags: AppData['unitTags'] | undefined, units: Unit[]) {

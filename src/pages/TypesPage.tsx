@@ -2,6 +2,7 @@ import { Copy, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { NumberStepper } from '../components/NumberStepper';
 import { SectionHeader } from '../components/SectionHeader';
+import { SkillConditionBuilder } from '../components/SkillConditionBuilder';
 import { TextField } from '../components/TextField';
 import { UnitIcon } from '../components/UnitIcon';
 import { createSkillFromPreset, createTraitFromPreset, skillPresets, traitPresets } from '../data/presets';
@@ -781,6 +782,7 @@ function SkillTemplateSettings({
               })}
             </div>
           </div>
+          <SkillConditionBuilder availableTags={tags} onUpdate={onUpdate} skill={selectedSkill} />
           <TextField label="메모" multiline onChange={(notes) => onUpdate({ notes })} value={selectedSkill.notes} />
         </div>
       ) : null}

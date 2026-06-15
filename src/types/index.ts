@@ -125,6 +125,40 @@ export interface SkillArea {
   length?: number;
 }
 
+export type ConditionLogic = 'AND' | 'OR';
+
+export type SkillConditionType =
+  | 'always'
+  | 'selfHpBelow'
+  | 'selfHpAbove'
+  | 'selfMpAbove'
+  | 'allyHpBelow'
+  | 'enemyHpBelow'
+  | 'enemyInRange'
+  | 'allyInRange'
+  | 'enemyCountInRadius'
+  | 'allyCountInRadius'
+  | 'enemyInLine'
+  | 'allyInLine'
+  | 'targetHasTag'
+  | 'allyHasTag'
+  | 'enemyHasTag'
+  | 'heroAlive'
+  | 'shieldBelow'
+  | 'noShieldAllyExists';
+
+export interface SkillCondition {
+  id: Id;
+  type: SkillConditionType;
+  value?: number;
+  radius?: number;
+  range?: number;
+  count?: number;
+  tags?: string[];
+  compare?: 'lt' | 'lte' | 'gt' | 'gte' | 'eq';
+  targetSide?: 'ally' | 'enemy' | 'self';
+}
+
 export interface Skill {
   id: Id;
   name: string;
@@ -141,6 +175,8 @@ export interface Skill {
   maxActivations?: number;
   tags?: string[];
   area?: SkillArea;
+  conditionLogic?: ConditionLogic;
+  conditions?: SkillCondition[];
   notes: string;
 }
 

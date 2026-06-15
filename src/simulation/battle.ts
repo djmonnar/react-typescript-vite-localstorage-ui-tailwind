@@ -12,6 +12,7 @@ import type {
   GridTile,
   SimulationSummary,
   Skill,
+  SkillCondition,
   SkillStat,
   TypeAdvantageReport,
   UnitDamage,
@@ -358,6 +359,72 @@ function pickRandom(combatants: Combatant[]): Combatant[] {
   return [combatants[Math.floor(Math.random() * combatants.length)]];
 }
 
+function compareNumber(left: number, compare: SkillCondition['compare'] | undefined, right: number, fallback: NonNullable<SkillCondition['compare']>): boolean {
+  const operator = compare ?? fallback;
+  if (operator === 'lt') return left < right;
+  if (operator === 'lte') return left <= right;
+  if (operator === 'gt') return left > right;
+  if (operator === 'gte') return left >= right;
+  return left === right;
+}
+
+function hasAnyTag(combatant: Combatant, tags: string[] | undefined): boolean {
+  if (!tags || tags.length === 0) return true;
+  return tags.some((tag) => combatant.unit.tags.includes(tag));
+}
+
+function combatantsInRadius(source: Combatant, candidates: Combatant[], radius: number): Combatant[] {
+  return candidates.filter((candidate) => candidate.id !== source.id && tileDistance(source.tile, candidate.tile) <= radius);
+}
+
+function combatantsInLine(source: Combatant, candidates: Combatant[], range: number): Combatant[] {
+  return candidates.filter((candidate) => {
+    if (candidate.id === source.id) return false;
+    const sameAxis = candidate.tile.x === source.tile.x || candidate.tile.y === source.tile.y;
+    return sameAxis && tileDistance(source.tile, candidate.tile) <= range;
+  });
+}
+
+function conditionPasses(caster: Combatant, condition: SkillCondition, combatants: Combatant[], currentTarget?: Combatant): boolean {
+  const allies = alive(combatants, caster.team);
+  const otherAllies = allies.filter((ally) => ally.id !== caster.id);
+  const enemies = alive(combatants, caster.team === 'A' ? 'B' : 'A');
+  const percentValue = condition.value ?? 0;
+  const range = Math.max(1, Math.round(condition.range ?? condition.radius ?? currentRange(caster)));
+  const radius = Math.max(1, Math.round(condition.radius ?? condition.range ?? currentRange(caster)));
+  const count = Math.max(1, Math.round(condition.count ?? 1));
+
+  if (condition.type === 'always') return true;
+  if (condition.type === 'selfHpBelow') return compareNumber(hpRatio(caster) * 100, condition.compare, percentValue, 'lte');
+  if (condition.type === 'selfHpAbove') return compareNumber(hpRatio(caster) * 100, condition.compare, percentValue, 'gte');
+  if (condition.type === 'selfMpAbove') return compareNumber(caster.mp, condition.compare, condition.value ?? 0, 'gte');
+  if (condition.type === 'allyHpBelow') return otherAllies.some((ally) => compareNumber(hpRatio(ally) * 100, condition.compare, percentValue, 'lte'));
+  if (condition.type === 'enemyHpBelow') return enemies.some((enemy) => compareNumber(hpRatio(enemy) * 100, condition.compare, percentValue, 'lte'));
+  if (condition.type === 'enemyInRange') return combatantsInRadius(caster, enemies, range).length > 0;
+  if (condition.type === 'allyInRange') return combatantsInRadius(caster, otherAllies, range).length > 0;
+  if (condition.type === 'enemyCountInRadius') return combatantsInRadius(caster, enemies, radius).length >= count;
+  if (condition.type === 'allyCountInRadius') return combatantsInRadius(caster, otherAllies, radius).length >= count;
+  if (condition.type === 'enemyInLine') return combatantsInLine(caster, enemies, range).length > 0;
+  if (condition.type === 'allyInLine') return combatantsInLine(caster, otherAllies, range).length > 0;
+  if (condition.type === 'targetHasTag') return currentTarget ? hasAnyTag(currentTarget, condition.tags) : false;
+  if (condition.type === 'allyHasTag') return allies.some((ally) => hasAnyTag(ally, condition.tags));
+  if (condition.type === 'enemyHasTag') return enemies.some((enemy) => hasAnyTag(enemy, condition.tags));
+  if (condition.type === 'heroAlive') return allies.some((ally) => ally.unit.isHero);
+  if (condition.type === 'shieldBelow') {
+    const candidates = condition.targetSide === 'enemy' ? enemies : condition.targetSide === 'ally' ? otherAllies : [caster];
+    return candidates.some((candidate) => compareNumber(candidate.shield, condition.compare, condition.value ?? 0, 'lte'));
+  }
+  if (condition.type === 'noShieldAllyExists') return allies.some((ally) => ally.shield <= 0);
+
+  return true;
+}
+
+function skillConditionsPass(caster: Combatant, skill: Skill, combatants: Combatant[], currentTarget?: Combatant): boolean {
+  const conditions = skill.conditions?.length ? skill.conditions : [{ id: `${skill.id}_always`, type: 'always' as const }];
+  if (skill.conditionLogic === 'OR') return conditions.some((condition) => conditionPasses(caster, condition, combatants, currentTarget));
+  return conditions.every((condition) => conditionPasses(caster, condition, combatants, currentTarget));
+}
+
 function ensureSkillStat(stats: Map<string, SkillStat>, skill: Skill): SkillStat {
   const previous = stats.get(skill.id);
   if (previous) return previous;
@@ -402,6 +469,7 @@ function activateSkill(
   context: SkillContext,
 ): boolean {
   if (!canActivateSkill(caster, skill, time)) return false;
+  if (!skillConditionsPass(caster, skill, combatants, context.currentTarget)) return false;
   const targets = getSkillTargets(caster, skill, combatants, context.currentTarget);
   if (targets.length === 0) return false;
 
