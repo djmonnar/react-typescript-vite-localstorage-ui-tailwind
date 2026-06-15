@@ -17,7 +17,12 @@ function traitApplies(unit: Unit, trait: Trait): boolean {
 
 function passiveTraitApplies(unit: Unit, trait: Trait): boolean {
   if (trait.trigger && trait.trigger !== 'battleStart') return false;
+  if (trait.triggerV2 && trait.triggerV2 !== 'battleStart' && trait.triggerV2 !== 'always') return false;
   if (trait.targetSide && trait.targetSide !== 'ally') return false;
+  if (trait.targetV2 === 'heroes' && !unit.isHero) return false;
+  if (trait.targetV2 === 'nonHeroes' && unit.isHero) return false;
+  if (trait.targetV2 === 'meleeUnits' && unit.range > 1) return false;
+  if (trait.targetV2 === 'rangedUnits' && unit.range <= 1) return false;
   if (trait.filters?.attackTypeId && unit.attackType !== trait.filters.attackTypeId) return false;
   if (trait.filters?.defenseTypeId && unit.defenseType !== trait.filters.defenseTypeId) return false;
   if (typeof trait.filters?.isHero === 'boolean' && unit.isHero !== trait.filters.isHero) return false;
@@ -64,7 +69,8 @@ export function getEffectiveUnit(unit: Unit, race: Race | undefined, data: AppDa
 
     if (!passiveTraitApplies(unit, trait)) continue;
 
-    for (const effect of trait.effects ?? []) {
+    const effects = trait.effectsV2 && trait.effectsV2.length > 0 ? trait.effectsV2 : trait.effects ?? [];
+    for (const effect of effects) {
       if (effect.type === 'hpPercent') {
         base.effectiveHp *= 1 + effect.value / 100;
       }
@@ -74,11 +80,20 @@ export function getEffectiveUnit(unit: Unit, race: Race | undefined, data: AppDa
       if (effect.type === 'defenseFlat') {
         base.effectiveDefense += effect.value;
       }
+      if (effect.type === 'mpFlat') {
+        base.mp += effect.value;
+      }
       if (effect.type === 'shieldPercent') {
         base.effectiveShield *= 1 + effect.value / 100;
       }
       if (effect.type === 'moveSpeedPercent') {
         base.effectiveMoveSpeed *= 1 + effect.value / 100;
+      }
+      if (effect.type === 'moveSpeedFlat') {
+        base.effectiveMoveSpeed += effect.value;
+      }
+      if (effect.type === 'rangeFlat') {
+        base.range = Math.max(1, base.range + effect.value);
       }
       if (effect.type === 'attackSpeedPercent') {
         base.attackSpeed *= 1 + effect.value / 100;

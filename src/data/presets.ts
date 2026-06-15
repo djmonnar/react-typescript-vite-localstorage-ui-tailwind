@@ -247,6 +247,7 @@ export function createSkillFromPreset(preset: SkillPreset): Skill {
     duration: preset.duration,
     maxActivations: preset.maxActivations,
     tags: preset.tags ?? [],
+    area: { type: 'single' },
     notes: '',
   };
 }

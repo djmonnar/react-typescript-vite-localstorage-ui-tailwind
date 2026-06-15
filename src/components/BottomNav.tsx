@@ -1,4 +1,4 @@
-import { BookOpen, Bot, Crosshair, FileText, Swords } from 'lucide-react';
+import { BookOpen, Bot, FileText, Settings2, Swords } from 'lucide-react';
 import type { TabKey } from '../types';
 
 interface BottomNavProps {
@@ -9,9 +9,9 @@ interface BottomNavProps {
 const tabs: Array<{ key: TabKey; label: string; icon: typeof BookOpen }> = [
   { key: 'races', label: '팩션', icon: BookOpen },
   { key: 'units', label: '유닛', icon: Bot },
-  { key: 'types', label: '상성', icon: Crosshair },
   { key: 'battle', label: '전투', icon: Swords },
-  { key: 'logs', label: '로그', icon: FileText },
+  { key: 'logs', label: '결과', icon: FileText },
+  { key: 'types', label: '세부설정', icon: Settings2 },
 ];
 
 export function BottomNav({ active, onChange }: BottomNavProps) {

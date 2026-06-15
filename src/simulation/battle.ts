@@ -96,7 +96,9 @@ function currentDefense(combatant: Combatant): number {
 }
 
 function movePower(combatant: Combatant): number {
-  return Math.max(1, Math.min(4, Math.round(applyBuffValue(combatant.unit.effectiveMoveSpeed, combatant.buffs, 'moveSpeedBuff'))));
+  const buffed = applyBuffValue(combatant.unit.effectiveMoveSpeed, combatant.buffs, 'moveSpeedBuff');
+  const slowed = applyBuffValue(buffed, combatant.buffs, 'slow');
+  return Math.max(1, Math.min(4, Math.round(slowed)));
 }
 
 function currentAttackSpeed(combatant: Combatant): number {
@@ -137,8 +139,8 @@ function tileDistance(left: GridTile, right: GridTile): number {
   return Math.abs(left.x - right.x) + Math.abs(left.y - right.y);
 }
 
-function attackRange(unit: EffectiveUnit): number {
-  return Math.max(1, Math.round(unit.range));
+function currentRange(combatant: Combatant): number {
+  return Math.max(1, Math.round(applyBuffValue(combatant.unit.range, combatant.buffs, 'rangeBuff')));
 }
 
 function occupiedTiles(combatants: Combatant[], exceptId?: string): Set<string> {
@@ -213,7 +215,7 @@ function selectClosest(attacker: Combatant, enemies: Combatant[]): Combatant {
 }
 
 function selectTargetInRange(attacker: Combatant, enemies: Combatant[]): Combatant | undefined {
-  const range = attackRange(attacker.unit);
+  const range = currentRange(attacker);
   const inRange = enemies.filter((enemy) => tileDistance(attacker.tile, enemy.tile) <= range);
   if (inRange.length === 0) return undefined;
 
@@ -333,9 +335,27 @@ function getSkillTargets(
   if (skill.target === 'enemyTarget') return currentTarget && currentTarget.hp > 0 ? [currentTarget] : [];
   if (skill.target === 'enemyLowestHp') return [...enemies].sort((left, right) => hpRatio(left) - hpRatio(right)).slice(0, 1);
   if (skill.target === 'allEnemies') return enemies;
-  if (skill.target === 'enemiesInRange') return enemies.filter((enemy) => tileDistance(caster.tile, enemy.tile) <= attackRange(caster.unit));
+  if (skill.target === 'enemiesInRange') return enemies.filter((enemy) => tileDistance(caster.tile, enemy.tile) <= currentRange(caster));
+  if (skill.target === 'alliesInRange') return allies.filter((ally) => ally.id !== caster.id && tileDistance(caster.tile, ally.tile) <= currentRange(caster));
+  if (skill.target === 'nearestEnemy') return [...enemies].sort((left, right) => tileDistance(caster.tile, left.tile) - tileDistance(caster.tile, right.tile)).slice(0, 1);
+  if (skill.target === 'farthestEnemy') return [...enemies].sort((left, right) => tileDistance(caster.tile, right.tile) - tileDistance(caster.tile, left.tile)).slice(0, 1);
+  if (skill.target === 'randomEnemy') return pickRandom(enemies);
+  if (skill.target === 'randomAlly') return pickRandom(allies);
+  if (skill.target === 'enemiesWithTag') return enemies.filter((enemy) => skill.tags?.some((tag) => enemy.unit.tags.includes(tag)));
+  if (skill.target === 'alliesWithTag') return allies.filter((ally) => skill.tags?.some((tag) => ally.unit.tags.includes(tag)));
+  if (skill.target === 'circleArea') {
+    const center = currentTarget ?? enemies[0];
+    if (!center) return [];
+    const radius = Math.max(1, skill.area?.radius ?? 1);
+    return enemies.filter((enemy) => tileDistance(center.tile, enemy.tile) <= radius);
+  }
 
   return [];
+}
+
+function pickRandom(combatants: Combatant[]): Combatant[] {
+  if (combatants.length === 0) return [];
+  return [combatants[Math.floor(Math.random() * combatants.length)]];
 }
 
 function ensureSkillStat(stats: Map<string, SkillStat>, skill: Skill): SkillStat {
@@ -418,22 +438,38 @@ function activateSkill(
       stat.shield += amount;
     }
 
-    if (
-      skill.effectType === 'attackBuff' ||
-      skill.effectType === 'defenseBuff' ||
-      skill.effectType === 'moveSpeedBuff' ||
-      skill.effectType === 'attackSpeedBuff'
-    ) {
+      if (
+        skill.effectType === 'attackBuff' ||
+        skill.effectType === 'defenseBuff' ||
+        skill.effectType === 'moveSpeedBuff' ||
+        skill.effectType === 'attackSpeedBuff' ||
+        skill.effectType === 'rangeBuff' ||
+        skill.effectType === 'slow'
+      ) {
       target.buffs.push({
         id: `${skill.id}_${target.id}_${time}_${stat.activations}`,
         sourceSkillId: skill.id,
         effectType: skill.effectType,
-        value: skill.value,
+        value: skill.effectType === 'slow' ? -Math.abs(skill.value) : skill.value,
         valueType: skill.valueType,
         expiresAt: skill.duration > 0 ? round2(time + skill.duration) : 0,
       });
       totalApplied += 1;
       stat.buffActivations += 1;
+    }
+
+    if (skill.effectType === 'mpRestore') {
+      const amount = Math.round(skillValue(skill, caster, target));
+      target.mp = Math.min(target.maxMp, target.mp + amount);
+      totalApplied += amount;
+      stat.healing += amount;
+    }
+
+    if (skill.effectType === 'removeShield') {
+      const amount = Math.min(target.shield, Math.round(skillValue(skill, caster, target)));
+      target.shield = Math.max(0, target.shield - amount);
+      totalApplied += amount;
+      stat.damage += amount;
     }
 
     targetHpAfter[target.id] = target.hp;
@@ -954,6 +990,7 @@ export function simulateBattle(
         }
         if (defeated) logs.push(`[${time.toFixed(2).padStart(6, '0')}] DOWN: ${targetInRange.team}:${targetInRange.unit.name}`);
 
+        triggerSkills(targetInRange, 'onHit', combatants, data, time, { ...skillContext, currentTarget: actor });
         triggerSkills(actor, 'onAttack', combatants, data, time, { ...skillContext, currentTarget: targetInRange });
         actor.nextAttackAt = round2(time + combatantCooldown(actor));
         continue;

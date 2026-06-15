@@ -29,7 +29,57 @@ export interface PassiveTraitEffect {
   value: number;
 }
 
-export type SkillTrigger = 'battleStart' | 'onAttack' | 'cooldown' | 'lowHp';
+export type TraitTrigger =
+  | 'battleStart'
+  | 'always'
+  | 'firstTurn'
+  | 'whenHeroAlive'
+  | 'whenOutnumbered'
+  | 'whenEnemyHasTag';
+
+export type TraitTarget =
+  | 'allAllies'
+  | 'unitsWithTags'
+  | 'heroes'
+  | 'nonHeroes'
+  | 'meleeUnits'
+  | 'rangedUnits';
+
+export type TraitEffectTypeV2 =
+  | 'hpPercent'
+  | 'shieldPercent'
+  | 'attackPercent'
+  | 'defenseFlat'
+  | 'moveSpeedPercent'
+  | 'moveSpeedFlat'
+  | 'rangeFlat'
+  | 'attackSpeedPercent'
+  | 'mpFlat'
+  | 'skillCooldownPercent'
+  | 'unitCostDiscount';
+
+export type UnitTagCategory = '종족' | '역할' | '전투방식' | '속성' | '상태' | '커스텀';
+
+export interface UnitTag {
+  id: Id;
+  name: string;
+  description: string;
+  category: UnitTagCategory;
+  color?: string;
+  notes: string;
+}
+
+export type SkillTrigger =
+  | 'battleStart'
+  | 'onAttack'
+  | 'cooldown'
+  | 'lowHp'
+  | 'onHit'
+  | 'onKill'
+  | 'onDeath'
+  | 'turnStart'
+  | 'allyDeath'
+  | 'enemyInRange';
 
 export type SkillTarget =
   | 'self'
@@ -38,7 +88,16 @@ export type SkillTarget =
   | 'enemyTarget'
   | 'enemyLowestHp'
   | 'allEnemies'
-  | 'enemiesInRange';
+  | 'enemiesInRange'
+  | 'nearestEnemy'
+  | 'farthestEnemy'
+  | 'alliesInRange'
+  | 'randomEnemy'
+  | 'randomAlly'
+  | 'enemiesWithTag'
+  | 'alliesWithTag'
+  | 'lineArea'
+  | 'circleArea';
 
 export type SkillEffectType =
   | 'damage'
@@ -47,7 +106,24 @@ export type SkillEffectType =
   | 'attackBuff'
   | 'defenseBuff'
   | 'moveSpeedBuff'
-  | 'attackSpeedBuff';
+  | 'attackSpeedBuff'
+  | 'rangeBuff'
+  | 'mpRestore'
+  | 'pull'
+  | 'push'
+  | 'stun'
+  | 'slow'
+  | 'poison'
+  | 'burn'
+  | 'summon'
+  | 'cleanse'
+  | 'removeShield';
+
+export interface SkillArea {
+  type: 'single' | 'line' | 'circle' | 'cross';
+  radius?: number;
+  length?: number;
+}
 
 export interface Skill {
   id: Id;
@@ -64,13 +140,14 @@ export interface Skill {
   duration: number;
   maxActivations?: number;
   tags?: string[];
+  area?: SkillArea;
   notes: string;
 }
 
 export interface ActiveBuff {
   id: Id;
   sourceSkillId: Id;
-  effectType: 'attackBuff' | 'defenseBuff' | 'moveSpeedBuff' | 'attackSpeedBuff';
+  effectType: 'attackBuff' | 'defenseBuff' | 'moveSpeedBuff' | 'attackSpeedBuff' | 'rangeBuff' | 'slow';
   value: number;
   valueType: 'flat' | 'percent';
   expiresAt: number;
@@ -165,6 +242,10 @@ export interface Trait {
   targetSide?: 'ally';
   filters?: TraitFilters;
   effects?: PassiveTraitEffect[];
+  triggerV2?: TraitTrigger;
+  targetV2?: TraitTarget;
+  effectsV2?: Array<{ type: TraitEffectTypeV2; value: number }>;
+  stackable?: boolean;
   notes: string;
 }
 
@@ -399,10 +480,12 @@ export interface SimulationSummary extends BattleResult {
 export interface AppData {
   races: Race[];
   units: Unit[];
+  unitTags: UnitTag[];
   attackTypes: AttackType[];
   defenseTypes: DefenseType[];
   typeMatrix: TypeMatrix[];
   traits: Trait[];
+  skillTemplates: Skill[];
   battlePresets: BattlePreset[];
   lastResult?: BattleResult | SimulationSummary;
 }

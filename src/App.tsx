@@ -11,7 +11,7 @@ import type { TabKey } from './types';
 const pageTitle: Record<TabKey, string> = {
   races: 'FACTION.DATA',
   units: 'UNIT.EDITOR',
-  types: 'TYPE.MATRIX',
+  types: 'RULE.SETTINGS',
   battle: 'BATTLE.SIM',
   logs: 'RESULT.LOG',
 };

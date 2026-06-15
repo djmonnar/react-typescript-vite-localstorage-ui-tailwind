@@ -6,13 +6,13 @@ import { NumberStepper } from '../components/NumberStepper';
 import { SectionHeader } from '../components/SectionHeader';
 import { TextField } from '../components/TextField';
 import { UnitIcon } from '../components/UnitIcon';
-import { defaultUnitTags } from '../data/defaultTags';
 import { createSkillFromPreset, skillPresets } from '../data/presets';
-import type { AppData, Race, Skill, SkillEffectType, SkillTarget, SkillTrigger, Unit } from '../types';
+import type { AppData, Race, Skill, SkillArea, SkillEffectType, SkillTarget, SkillTrigger, Unit } from '../types';
 import { createId, nowIso } from '../utils/ids';
 import {
   formatSkillAutoDescription,
   formatSkillShortLine,
+  skillAreaLabels,
   skillEffectLabels,
   skillTargetLabels,
   skillTriggerLabels,
@@ -25,31 +25,17 @@ interface UnitsPageProps {
   setData: (updater: (current: AppData) => AppData) => void;
 }
 
-const skillTriggers: SkillTrigger[] = ['battleStart', 'onAttack', 'cooldown', 'lowHp'];
-const skillTargets: SkillTarget[] = [
-  'self',
-  'allyLowestHp',
-  'allAllies',
-  'enemyTarget',
-  'enemyLowestHp',
-  'allEnemies',
-  'enemiesInRange',
-];
-const skillEffects: SkillEffectType[] = [
-  'damage',
-  'heal',
-  'shield',
-  'attackBuff',
-  'defenseBuff',
-  'moveSpeedBuff',
-  'attackSpeedBuff',
-];
+const skillTriggers = Object.keys(skillTriggerLabels) as SkillTrigger[];
+const skillTargets = Object.keys(skillTargetLabels) as SkillTarget[];
+const skillEffects = Object.keys(skillEffectLabels) as SkillEffectType[];
+const skillAreas = Object.keys(skillAreaLabels) as SkillArea['type'][];
 
 export function UnitsPage({ data, setData }: UnitsPageProps) {
   const [selectedFactionId, setSelectedFactionId] = useState(data.races[0]?.id ?? '');
   const [selectedUnitId, setSelectedUnitId] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [selectedSkillPreset, setSelectedSkillPreset] = useState(skillPresets[0]?.name ?? '');
+  const [selectedSkillTemplateId, setSelectedSkillTemplateId] = useState(data.skillTemplates[0]?.id ?? '');
   const selectedFaction = data.races.find((candidate) => candidate.id === selectedFactionId) ?? data.races[0];
   const factionUnits = useMemo(
     () => data.units.filter((unit) => unit.raceId === selectedFaction?.id),
@@ -58,8 +44,8 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
   const selectedUnit = factionUnits.find((candidate) => candidate.id === selectedUnitId) ?? factionUnits[0];
   const availableTags = useMemo(() => {
     const customTags = data.units.flatMap((unit) => unit.tags ?? []);
-    return [...new Set([...defaultUnitTags, ...customTags])];
-  }, [data.units]);
+    return [...new Set([...data.unitTags.map((tag) => tag.name), ...customTags])];
+  }, [data.unitTags, data.units]);
 
   useEffect(() => {
     if (!data.races.some((candidate) => candidate.id === selectedFactionId)) {
@@ -212,6 +198,7 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
         chance: 100,
         duration: 0,
         tags: [],
+        area: { type: 'single' },
         notes: '',
       },
     ]);
@@ -222,6 +209,22 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
     const preset = skillPresets.find((candidate) => candidate.name === selectedSkillPreset) ?? skillPresets[0];
     if (!preset) return;
     setSkillsV2([...(selectedUnit.skillsV2 ?? []), createSkillFromPreset(preset)]);
+  };
+
+  const addSkillTemplate = () => {
+    if (!selectedUnit) return;
+    const template = data.skillTemplates.find((skill) => skill.id === selectedSkillTemplateId) ?? data.skillTemplates[0];
+    if (!template) return;
+    setSkillsV2([
+      ...(selectedUnit.skillsV2 ?? []),
+      {
+        ...template,
+        id: createId('skill'),
+        name: template.name,
+        tags: [...(template.tags ?? [])],
+        area: template.area ? { ...template.area } : { type: 'single' },
+      },
+    ]);
   };
 
   const updateSkill = (skillId: string, patch: Partial<Skill>) => {
@@ -491,10 +494,14 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
             </div>
             <SkillSection
               selectedSkillPreset={selectedSkillPreset}
+              selectedSkillTemplateId={selectedSkillTemplateId}
               setSelectedSkillPreset={setSelectedSkillPreset}
+              setSelectedSkillTemplateId={setSelectedSkillTemplateId}
+              skillTemplates={data.skillTemplates}
               skills={selectedUnit.skillsV2 ?? []}
               onAddSkill={addSkill}
               onAddSkillPreset={addSkillPreset}
+              onAddSkillTemplate={addSkillTemplate}
               onDeleteSkill={deleteSkill}
               onDuplicateSkill={duplicateSkill}
               onUpdateSkill={updateSkill}
@@ -589,18 +596,26 @@ function TagEditor({
 function SkillSection({
   onAddSkill,
   onAddSkillPreset,
+  onAddSkillTemplate,
   onDeleteSkill,
   onDuplicateSkill,
   onUpdateSkill,
   selectedSkillPreset,
+  selectedSkillTemplateId,
   setSelectedSkillPreset,
+  setSelectedSkillTemplateId,
+  skillTemplates,
   skills,
 }: {
   selectedSkillPreset: string;
+  selectedSkillTemplateId: string;
   setSelectedSkillPreset: (value: string) => void;
+  setSelectedSkillTemplateId: (value: string) => void;
+  skillTemplates: Skill[];
   skills: Skill[];
   onAddSkill: () => void;
   onAddSkillPreset: () => void;
+  onAddSkillTemplate: () => void;
   onDeleteSkill: (skillId: string) => void;
   onDuplicateSkill: (skill: Skill) => void;
   onUpdateSkill: (skillId: string, patch: Partial<Skill>) => void;
@@ -629,6 +644,23 @@ function SkillSection({
         </button>
         <button className="btn" onClick={onAddSkill} type="button">
           <Plus size={16} />빈 스킬
+        </button>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+        <select
+          className="field"
+          onChange={(event) => setSelectedSkillTemplateId(event.target.value)}
+          value={selectedSkillTemplateId}
+        >
+          {skillTemplates.map((skill) => (
+            <option key={skill.id} value={skill.id}>
+              {skill.name}
+            </option>
+          ))}
+        </select>
+        <button className="btn btn-primary" disabled={skillTemplates.length === 0} onClick={onAddSkillTemplate} type="button">
+          <Plus size={16} />
+          공용 스킬에서 추가
         </button>
       </div>
       {skills.map((skill) => (
@@ -676,6 +708,7 @@ function SkillEditor({
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const autoDescription = formatSkillAutoDescription(skill);
+  const area = skill.area ?? { type: 'single' as const };
 
   return (
     <div className="rounded-md border border-line bg-[#10151f] p-3">
@@ -751,6 +784,25 @@ function SkillEditor({
               label="최대 발동 횟수"
               onChange={(maxActivations) => onUpdate({ maxActivations: maxActivations > 0 ? maxActivations : undefined })}
               value={skill.maxActivations ?? 0}
+            />
+            <SkillSelect
+              label="영역"
+              labels={skillAreaLabels}
+              onChange={(type) => onUpdate({ area: { ...area, type: type as SkillArea['type'] } })}
+              options={skillAreas}
+              value={area.type}
+            />
+            <NumberStepper
+              label="반경"
+              min={0}
+              onChange={(radius) => onUpdate({ area: { ...area, radius } })}
+              value={area.radius ?? 0}
+            />
+            <NumberStepper
+              label="길이"
+              min={0}
+              onChange={(length) => onUpdate({ area: { ...area, length } })}
+              value={area.length ?? 0}
             />
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

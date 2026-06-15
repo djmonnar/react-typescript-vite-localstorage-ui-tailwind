@@ -1,4 +1,6 @@
 import type { AppData, AttackType, DefenseType, Race, Trait, Unit } from '../types';
+import { createDefaultUnitTags } from './defaultTags';
+import { createSkillFromPreset, skillPresets } from './presets';
 
 const createdAt = '2026-06-15T00:00:00.000Z';
 
@@ -323,10 +325,12 @@ function createDefaultMatrix() {
 export const sampleData: AppData = {
   races,
   units,
+  unitTags: createDefaultUnitTags(),
   attackTypes,
   defenseTypes,
   typeMatrix: createDefaultMatrix(),
   traits,
+  skillTemplates: skillPresets.map(createSkillFromPreset),
   battlePresets: [
     {
       id: 'preset_default',
