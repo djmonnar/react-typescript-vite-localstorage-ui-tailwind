@@ -247,6 +247,7 @@ export function createSkillFromPreset(preset: SkillPreset): Skill {
     duration: preset.duration,
     maxActivations: preset.maxActivations,
     tags: preset.tags ?? [],
+    targetTags: [],
     area: { type: 'single' },
     attackTypeId: undefined,
     conditionLogic: 'AND',

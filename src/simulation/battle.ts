@@ -331,26 +331,31 @@ function getSkillTargets(
 ): Combatant[] {
   const allies = alive(combatants, caster.team);
   const enemies = alive(combatants, caster.team === 'A' ? 'B' : 'A');
+  const filterTargets = (targets: Combatant[]) => {
+    const targetTags = skill.targetTags ?? [];
+    if (targetTags.length === 0) return targets;
+    return targets.filter((target) => targetTags.some((tag) => target.unit.tags.includes(tag)));
+  };
 
-  if (skill.target === 'self') return [caster];
-  if (skill.target === 'allyLowestHp') return [...allies].sort((left, right) => hpRatio(left) - hpRatio(right)).slice(0, 1);
-  if (skill.target === 'allAllies') return allies;
-  if (skill.target === 'enemyTarget') return currentTarget && currentTarget.hp > 0 ? [currentTarget] : [];
-  if (skill.target === 'enemyLowestHp') return [...enemies].sort((left, right) => hpRatio(left) - hpRatio(right)).slice(0, 1);
-  if (skill.target === 'allEnemies') return enemies;
-  if (skill.target === 'enemiesInRange') return enemies.filter((enemy) => tileDistance(caster.tile, enemy.tile) <= currentRange(caster));
-  if (skill.target === 'alliesInRange') return allies.filter((ally) => ally.id !== caster.id && tileDistance(caster.tile, ally.tile) <= currentRange(caster));
-  if (skill.target === 'nearestEnemy') return [...enemies].sort((left, right) => tileDistance(caster.tile, left.tile) - tileDistance(caster.tile, right.tile)).slice(0, 1);
-  if (skill.target === 'farthestEnemy') return [...enemies].sort((left, right) => tileDistance(caster.tile, right.tile) - tileDistance(caster.tile, left.tile)).slice(0, 1);
-  if (skill.target === 'randomEnemy') return pickRandom(enemies);
-  if (skill.target === 'randomAlly') return pickRandom(allies);
-  if (skill.target === 'enemiesWithTag') return enemies.filter((enemy) => skill.tags?.some((tag) => enemy.unit.tags.includes(tag)));
-  if (skill.target === 'alliesWithTag') return allies.filter((ally) => skill.tags?.some((tag) => ally.unit.tags.includes(tag)));
+  if (skill.target === 'self') return filterTargets([caster]);
+  if (skill.target === 'allyLowestHp') return filterTargets([...allies].sort((left, right) => hpRatio(left) - hpRatio(right))).slice(0, 1);
+  if (skill.target === 'allAllies') return filterTargets(allies);
+  if (skill.target === 'enemyTarget') return filterTargets(currentTarget && currentTarget.hp > 0 ? [currentTarget] : []);
+  if (skill.target === 'enemyLowestHp') return filterTargets([...enemies].sort((left, right) => hpRatio(left) - hpRatio(right))).slice(0, 1);
+  if (skill.target === 'allEnemies') return filterTargets(enemies);
+  if (skill.target === 'enemiesInRange') return filterTargets(enemies.filter((enemy) => tileDistance(caster.tile, enemy.tile) <= currentRange(caster)));
+  if (skill.target === 'alliesInRange') return filterTargets(allies.filter((ally) => ally.id !== caster.id && tileDistance(caster.tile, ally.tile) <= currentRange(caster)));
+  if (skill.target === 'nearestEnemy') return filterTargets([...enemies].sort((left, right) => tileDistance(caster.tile, left.tile) - tileDistance(caster.tile, right.tile))).slice(0, 1);
+  if (skill.target === 'farthestEnemy') return filterTargets([...enemies].sort((left, right) => tileDistance(caster.tile, right.tile) - tileDistance(caster.tile, left.tile))).slice(0, 1);
+  if (skill.target === 'randomEnemy') return pickRandom(filterTargets(enemies));
+  if (skill.target === 'randomAlly') return pickRandom(filterTargets(allies));
+  if (skill.target === 'enemiesWithTag') return filterTargets(enemies.filter((enemy) => skill.tags?.some((tag) => enemy.unit.tags.includes(tag))));
+  if (skill.target === 'alliesWithTag') return filterTargets(allies.filter((ally) => skill.tags?.some((tag) => ally.unit.tags.includes(tag))));
   if (skill.target === 'circleArea') {
     const center = currentTarget ?? enemies[0];
     if (!center) return [];
     const radius = Math.max(1, skill.area?.radius ?? 1);
-    return enemies.filter((enemy) => tileDistance(center.tile, enemy.tile) <= radius);
+    return filterTargets(enemies.filter((enemy) => tileDistance(center.tile, enemy.tile) <= radius));
   }
 
   return [];

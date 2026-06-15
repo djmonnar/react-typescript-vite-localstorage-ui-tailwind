@@ -176,6 +176,7 @@ export interface Skill {
   duration: number;
   maxActivations?: number;
   tags?: string[];
+  targetTags?: string[];
   area?: SkillArea;
   attackTypeId?: Id;
   conditionLogic?: ConditionLogic;

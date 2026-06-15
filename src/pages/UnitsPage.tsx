@@ -5,6 +5,7 @@ import { JsonPreview } from '../components/JsonPreview';
 import { NumberStepper } from '../components/NumberStepper';
 import { SectionHeader } from '../components/SectionHeader';
 import { SkillConditionBuilder } from '../components/SkillConditionBuilder';
+import { TargetTagPicker } from '../components/TargetTagPicker';
 import { TextField } from '../components/TextField';
 import { UnitIcon } from '../components/UnitIcon';
 import { createSkillFromPreset, skillPresets } from '../data/presets';
@@ -228,6 +229,7 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
         id: createId('skill'),
         name: template.name,
         tags: [...(template.tags ?? [])],
+        targetTags: [...(template.targetTags ?? [])],
         area: template.area ? { ...template.area } : { type: 'single' },
         conditions: (template.conditions ?? []).map((condition) => ({
           ...condition,
@@ -260,6 +262,7 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
         id: createId('condition'),
         tags: [...(condition.tags ?? [])],
       })),
+      targetTags: [...(skill.targetTags ?? [])],
     };
     setData((current) => ({ ...current, skillTemplates: [...current.skillTemplates, template] }));
     setSelectedSkillTemplateId(template.id);
@@ -890,6 +893,11 @@ function SkillEditor({
             />
             <TextField label="스킬 메모" onChange={(notes) => onUpdate({ notes })} value={skill.notes} />
           </div>
+          <TargetTagPicker
+            availableTags={availableTags}
+            selectedTags={skill.targetTags ?? []}
+            onChange={(targetTags) => onUpdate({ targetTags })}
+          />
           <SkillConditionBuilder availableTags={availableTags} onUpdate={onUpdate} skill={skill} />
           <pre className="max-h-60 overflow-auto rounded-md border border-line bg-[#05070a] p-3 font-mono text-[10px] leading-relaxed text-acid">
             {JSON.stringify(skill, null, 2)}

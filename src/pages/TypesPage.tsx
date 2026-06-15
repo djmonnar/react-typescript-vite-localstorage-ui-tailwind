@@ -3,6 +3,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { NumberStepper } from '../components/NumberStepper';
 import { SectionHeader } from '../components/SectionHeader';
 import { SkillConditionBuilder } from '../components/SkillConditionBuilder';
+import { TargetTagPicker } from '../components/TargetTagPicker';
 import { TextField } from '../components/TextField';
 import { UnitIcon } from '../components/UnitIcon';
 import { createSkillFromPreset, createTraitFromPreset, skillPresets, traitPresets } from '../data/presets';
@@ -246,6 +247,7 @@ export function TypesPage({ data, setData }: TypesPageProps) {
         skillsV2: (unit.skillsV2 ?? []).map((skill) => ({
           ...skill,
           tags: (skill.tags ?? []).filter((tag) => tag !== tagName),
+          targetTags: (skill.targetTags ?? []).filter((tag) => tag !== tagName),
         })),
       })),
       traits: current.traits.map((trait) => ({
@@ -255,6 +257,7 @@ export function TypesPage({ data, setData }: TypesPageProps) {
       skillTemplates: current.skillTemplates.map((skill) => ({
         ...skill,
         tags: (skill.tags ?? []).filter((tag) => tag !== tagName),
+        targetTags: (skill.targetTags ?? []).filter((tag) => tag !== tagName),
       })),
     }));
     setTagId(data.unitTags.find((tag) => tag.id !== selectedTag.id)?.id ?? '');
@@ -801,6 +804,11 @@ function SkillTemplateSettings({
               })}
             </div>
           </div>
+          <TargetTagPicker
+            availableTags={tags}
+            selectedTags={selectedSkill.targetTags ?? []}
+            onChange={(targetTags) => onUpdate({ targetTags })}
+          />
           <SkillConditionBuilder availableTags={tags} onUpdate={onUpdate} skill={selectedSkill} />
           <TextField label="메모" multiline onChange={(notes) => onUpdate({ notes })} value={selectedSkill.notes} />
         </div>
@@ -887,12 +895,20 @@ function renameTagEverywhere(current: AppData, previousName: string, nextName: s
     units: current.units.map((unit) => ({
       ...unit,
       tags: renameList(unit.tags),
-      skillsV2: (unit.skillsV2 ?? []).map((skill) => ({ ...skill, tags: renameList(skill.tags) })),
+      skillsV2: (unit.skillsV2 ?? []).map((skill) => ({
+        ...skill,
+        tags: renameList(skill.tags),
+        targetTags: renameList(skill.targetTags),
+      })),
     })),
     traits: current.traits.map((trait) => ({
       ...trait,
       filters: { ...(trait.filters ?? {}), tags: renameList(trait.filters?.tags) },
     })),
-    skillTemplates: current.skillTemplates.map((skill) => ({ ...skill, tags: renameList(skill.tags) })),
+    skillTemplates: current.skillTemplates.map((skill) => ({
+      ...skill,
+      tags: renameList(skill.tags),
+      targetTags: renameList(skill.targetTags),
+    })),
   };
 }
