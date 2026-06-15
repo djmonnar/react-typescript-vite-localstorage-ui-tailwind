@@ -80,12 +80,14 @@ export const skillAreaLabels: Record<NonNullable<Skill['area']>['type'], string>
   single: '단일',
   line: '직선',
   circle: '원형',
+  selfCircle: '자기 주변',
   cross: '십자',
 };
 
 export function skillAreaHelp(type: NonNullable<Skill['area']>['type']): string {
   if (type === 'single') return '단일은 선택된 대상 1명에게만 적용됩니다. 반경과 길이는 사용하지 않습니다.';
   if (type === 'circle') return '원형은 대상 주변으로 반경 n칸 안의 유닛에게 적용됩니다. 예: 반경 1은 대상 주변 1칸입니다.';
+  if (type === 'selfCircle') return '자기 주변은 스킬 사용자 주변 반경 n칸 안의 대상에게 적용됩니다. 대상이 아군이면 주변 아군, 적이면 주변 적에게 적용됩니다.';
   if (type === 'line') return '직선은 시전자 기준 일직선 n칸을 뜻합니다. 현재는 데이터 설정용이며 전투 적용은 제한적입니다.';
   return '십자는 상하좌우 방향 범위를 뜻합니다. 반경은 퍼지는 칸 수, 길이는 뻗는 칸 수입니다. 현재는 데이터 설정용에 가깝습니다.';
 }

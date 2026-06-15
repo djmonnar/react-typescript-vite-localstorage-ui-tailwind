@@ -142,7 +142,7 @@ export type SkillEffectType =
   | 'taunt';
 
 export interface SkillArea {
-  type: 'single' | 'line' | 'circle' | 'cross';
+  type: 'single' | 'line' | 'circle' | 'selfCircle' | 'cross';
   radius?: number;
   length?: number;
 }

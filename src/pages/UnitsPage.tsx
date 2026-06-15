@@ -951,7 +951,7 @@ function SkillEditor({
               options={skillAreas}
               value={area.type}
             />
-            {area.type === 'circle' || area.type === 'cross' ? (
+            {area.type === 'circle' || area.type === 'selfCircle' || area.type === 'cross' ? (
               <NumberStepper
                 label="반경"
                 min={0}

@@ -932,7 +932,7 @@ function SkillTemplateSettings({
             <NumberStepper label="발동 확률 %" max={100} onChange={(chance) => onUpdate({ chance })} value={selectedSkill.chance} />
             <SkillAdvancedTiming onUpdate={onUpdate} skill={selectedSkill} />
             <SelectField label="영역" labels={skillAreaLabels} onChange={(type) => onUpdate({ area: { ...area, type: type as SkillArea['type'] } })} options={skillAreas} value={area.type} />
-            {area.type === 'circle' || area.type === 'cross' ? (
+            {area.type === 'circle' || area.type === 'selfCircle' || area.type === 'cross' ? (
               <NumberStepper label="반경" min={0} onChange={(radius) => onUpdate({ area: { ...area, radius } })} value={area.radius ?? 0} />
             ) : null}
             {area.type === 'line' || area.type === 'cross' ? (

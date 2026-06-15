@@ -617,6 +617,18 @@ function skillValue(skill: Skill, caster: Combatant, target?: Combatant): number
   return skill.value;
 }
 
+function isAllySkillTarget(target: Skill['target']): boolean {
+  return [
+    'self',
+    'allyLowestHp',
+    'allyLowestHpInRange',
+    'allAllies',
+    'alliesInRange',
+    'randomAlly',
+    'alliesWithTag',
+  ].includes(target);
+}
+
 function getSkillTargets(
   caster: Combatant,
   skill: Skill,
@@ -630,6 +642,12 @@ function getSkillTargets(
     if (targetTags.length === 0) return targets;
     return targets.filter((target) => targetTags.some((tag) => target.unit.tags.includes(tag)));
   };
+
+  if (skill.area?.type === 'selfCircle') {
+    const radius = Math.max(0, Math.round(skill.area.radius ?? 1));
+    const candidates = isAllySkillTarget(skill.target) ? allies : enemies;
+    return filterTargets(candidates.filter((candidate) => tileDistance(caster.tile, candidate.tile) <= radius));
+  }
 
   if (skill.target === 'self') return filterTargets([caster]);
   if (skill.target === 'allyLowestHp') return filterTargets([...allies].sort((left, right) => hpRatio(left) - hpRatio(right))).slice(0, 1);
