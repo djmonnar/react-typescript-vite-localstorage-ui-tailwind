@@ -15,6 +15,19 @@ function traitApplies(unit: Unit, trait: Trait): boolean {
   return true;
 }
 
+function passiveTraitApplies(unit: Unit, trait: Trait): boolean {
+  if (trait.trigger && trait.trigger !== 'battleStart') return false;
+  if (trait.targetSide && trait.targetSide !== 'ally') return false;
+  if (trait.filters?.attackTypeId && unit.attackType !== trait.filters.attackTypeId) return false;
+  if (trait.filters?.defenseTypeId && unit.defenseType !== trait.filters.defenseTypeId) return false;
+  if (typeof trait.filters?.isHero === 'boolean' && unit.isHero !== trait.filters.isHero) return false;
+
+  const requiredTags = trait.filters?.tags ?? [];
+  if (requiredTags.length > 0 && !requiredTags.every((tag) => unit.tags.includes(tag))) return false;
+
+  return true;
+}
+
 export function getEffectiveUnit(unit: Unit, race: Race | undefined, data: AppData): EffectiveUnit {
   const base: EffectiveUnit = {
     ...unit,
@@ -28,25 +41,48 @@ export function getEffectiveUnit(unit: Unit, race: Race | undefined, data: AppDa
 
   const traits = data.traits.filter((trait) => race?.traitIds.includes(trait.id));
   for (const trait of traits) {
-    if (!traitApplies(unit, trait)) continue;
+    if (traitApplies(unit, trait)) {
+      if (trait.effectType === 'allHpPercent') {
+        base.effectiveHp *= 1 + trait.value / 100;
+      }
+      if (trait.effectType === 'allAttackPercent') {
+        base.effectiveAttack *= 1 + trait.value / 100;
+      }
+      if (trait.effectType === 'allDefenseFlat') {
+        base.effectiveDefense += trait.value;
+      }
+      if (trait.effectType === 'defenseTypeAttackPercent' || trait.effectType === 'attackTypeAttackPercent') {
+        base.effectiveAttack *= 1 + trait.value / 100;
+      }
+      if (trait.effectType === 'productionSpeedPercent') {
+        base.effectiveBuildTime = Math.max(1, base.effectiveBuildTime / (1 + trait.value / 100));
+      }
+      if (trait.effectType === 'moveSpeedPercent') {
+        base.effectiveMoveSpeed *= 1 + trait.value / 100;
+      }
+    }
 
-    if (trait.effectType === 'allHpPercent') {
-      base.effectiveHp *= 1 + trait.value / 100;
-    }
-    if (trait.effectType === 'allAttackPercent') {
-      base.effectiveAttack *= 1 + trait.value / 100;
-    }
-    if (trait.effectType === 'allDefenseFlat') {
-      base.effectiveDefense += trait.value;
-    }
-    if (trait.effectType === 'defenseTypeAttackPercent' || trait.effectType === 'attackTypeAttackPercent') {
-      base.effectiveAttack *= 1 + trait.value / 100;
-    }
-    if (trait.effectType === 'productionSpeedPercent') {
-      base.effectiveBuildTime = Math.max(1, base.effectiveBuildTime / (1 + trait.value / 100));
-    }
-    if (trait.effectType === 'moveSpeedPercent') {
-      base.effectiveMoveSpeed *= 1 + trait.value / 100;
+    if (!passiveTraitApplies(unit, trait)) continue;
+
+    for (const effect of trait.effects ?? []) {
+      if (effect.type === 'hpPercent') {
+        base.effectiveHp *= 1 + effect.value / 100;
+      }
+      if (effect.type === 'attackPercent') {
+        base.effectiveAttack *= 1 + effect.value / 100;
+      }
+      if (effect.type === 'defenseFlat') {
+        base.effectiveDefense += effect.value;
+      }
+      if (effect.type === 'shieldPercent') {
+        base.effectiveShield *= 1 + effect.value / 100;
+      }
+      if (effect.type === 'moveSpeedPercent') {
+        base.effectiveMoveSpeed *= 1 + effect.value / 100;
+      }
+      if (effect.type === 'attackSpeedPercent') {
+        base.attackSpeed *= 1 + effect.value / 100;
+      }
     }
   }
 
@@ -58,5 +94,6 @@ export function getEffectiveUnit(unit: Unit, race: Race | undefined, data: AppDa
     effectiveDefense: Math.round(base.effectiveDefense * 10) / 10,
     effectiveMoveSpeed: Math.round(base.effectiveMoveSpeed * 100) / 100,
     effectiveBuildTime: Math.round(base.effectiveBuildTime * 10) / 10,
+    attackSpeed: Math.round(base.attackSpeed * 100) / 100,
   };
 }

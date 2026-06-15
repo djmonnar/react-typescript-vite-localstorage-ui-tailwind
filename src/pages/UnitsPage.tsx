@@ -5,6 +5,7 @@ import { JsonPreview } from '../components/JsonPreview';
 import { NumberStepper } from '../components/NumberStepper';
 import { SectionHeader } from '../components/SectionHeader';
 import { TextField } from '../components/TextField';
+import { defaultUnitTags } from '../data/defaultTags';
 import type { AppData, Race, Unit } from '../types';
 import { createId, nowIso } from '../utils/ids';
 
@@ -15,11 +16,16 @@ interface UnitsPageProps {
 
 export function UnitsPage({ data, setData }: UnitsPageProps) {
   const [selectedFactionId, setSelectedFactionId] = useState(data.races[0]?.id ?? '');
+  const [tagInput, setTagInput] = useState('');
   const selectedFaction = data.races.find((candidate) => candidate.id === selectedFactionId) ?? data.races[0];
   const factionUnits = useMemo(
     () => data.units.filter((unit) => unit.raceId === selectedFaction?.id),
     [data.units, selectedFaction?.id],
   );
+  const availableTags = useMemo(() => {
+    const customTags = data.units.flatMap((unit) => unit.tags ?? []);
+    return [...new Set([...defaultUnitTags, ...customTags])];
+  }, [data.units]);
   const [selectedUnitId, setSelectedUnitId] = useState(factionUnits[0]?.id ?? '');
   const selectedUnit = factionUnits.find((candidate) => candidate.id === selectedUnitId);
 
@@ -79,6 +85,7 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
       range: 1,
       moveSpeed: 1,
       attackSpeed: 1,
+      tags: [],
       skills: '',
       cost: 50,
       buildTime: 10,
@@ -128,6 +135,26 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
       };
     });
     setSelectedUnitId(nextSelectedId);
+  };
+
+  const setUnitTags = (tags: string[]) => {
+    updateUnit({ tags: [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))] });
+  };
+
+  const toggleTag = (tag: string) => {
+    if (!selectedUnit) return;
+    const nextTags = selectedUnit.tags.includes(tag)
+      ? selectedUnit.tags.filter((candidate) => candidate !== tag)
+      : [...selectedUnit.tags, tag];
+    setUnitTags(nextTags);
+  };
+
+  const addCustomTag = () => {
+    if (!selectedUnit) return;
+    const nextTag = tagInput.trim();
+    if (!nextTag) return;
+    setUnitTags([...selectedUnit.tags, nextTag]);
+    setTagInput('');
   };
 
   const typeName = (kind: 'attack' | 'defense', id: string) => {
@@ -205,6 +232,15 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
                   {unit.isHero ? <span className="rounded bg-amber/15 px-2 py-1 text-xs font-bold text-amber">HERO</span> : null}
                 </div>
                 <p className="mt-1 text-sm text-muted">{unit.role}</p>
+                {unit.tags.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {unit.tags.map((tag) => (
+                      <span className="chip text-[10px]" key={tag}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
@@ -271,6 +307,58 @@ export function UnitsPage({ data, setData }: UnitsPageProps) {
           </FormSection>
 
           <FormSection title="전투 능력치">
+            <div className="mb-4 rounded-md border border-line bg-[#0f141d] p-3">
+              <h5 className="mb-3 text-sm font-bold text-cyan">태그</h5>
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map((tag) => {
+                  const checked = selectedUnit.tags.includes(tag);
+                  return (
+                    <button
+                      className={`min-h-11 rounded-md border px-3 py-2 text-sm font-semibold ${
+                        checked ? 'border-cyan bg-cyan/15 text-cyan' : 'border-line bg-[#10151f] text-muted'
+                      }`}
+                      key={tag}
+                      onClick={() => toggleTag(tag)}
+                      type="button"
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                <input
+                  className="field"
+                  onChange={(event) => setTagInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      addCustomTag();
+                    }
+                  }}
+                  placeholder="새 태그"
+                  type="text"
+                  value={tagInput}
+                />
+                <button className="btn btn-primary" onClick={addCustomTag} type="button">
+                  추가
+                </button>
+              </div>
+              {selectedUnit.tags.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectedUnit.tags.map((tag) => (
+                    <button
+                      className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs font-semibold text-danger"
+                      key={tag}
+                      onClick={() => setUnitTags(selectedUnit.tags.filter((candidate) => candidate !== tag))}
+                      type="button"
+                    >
+                      {tag} 삭제
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <NumberStepper label="HP" onChange={(hp) => updateUnit({ hp })} value={selectedUnit.hp} />
               <NumberStepper label="MP" onChange={(mp) => updateUnit({ mp })} value={selectedUnit.mp} />

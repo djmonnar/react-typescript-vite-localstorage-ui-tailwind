@@ -1,4 +1,4 @@
-import type { AppData, TypeMatrix } from '../types';
+import type { AppData, Trait, TypeMatrix, Unit } from '../types';
 
 export function ensureMatrix(data: AppData): TypeMatrix[] {
   const existing = new Map(
@@ -23,10 +23,13 @@ export function normalizeData(data: AppData): AppData {
 
   return {
     ...data,
-    units: data.units.filter(
-      (unit) =>
-        raceIds.has(unit.raceId) && attackTypeIds.has(unit.attackType) && defenseTypeIds.has(unit.defenseType),
-    ),
+    units: data.units
+      .filter(
+        (unit) =>
+          raceIds.has(unit.raceId) && attackTypeIds.has(unit.attackType) && defenseTypeIds.has(unit.defenseType),
+      )
+      .map(normalizeUnit),
+    traits: data.traits.map(normalizeTrait),
     races: data.races.map((race) => ({
       ...race,
       traitIds: race.traitIds.filter((id) => traitIds.has(id)),
@@ -39,5 +42,23 @@ export function normalizeData(data: AppData): AppData {
       armyA: preset.armyA.filter((entry) => unitIds.has(entry.unitId)),
       armyB: preset.armyB.filter((entry) => unitIds.has(entry.unitId)),
     })),
+  };
+}
+
+function normalizeUnit(unit: Unit): Unit {
+  return {
+    ...unit,
+    tags: Array.isArray(unit.tags) ? [...new Set(unit.tags.filter(Boolean))] : [],
+  };
+}
+
+function normalizeTrait(trait: Trait): Trait {
+  return {
+    ...trait,
+    targetFilter: trait.targetFilter ?? {},
+    trigger: trait.trigger ?? 'battleStart',
+    targetSide: trait.targetSide ?? 'ally',
+    filters: trait.filters ?? {},
+    effects: Array.isArray(trait.effects) ? trait.effects : [],
   };
 }

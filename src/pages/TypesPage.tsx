@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { NumberStepper } from '../components/NumberStepper';
 import { SectionHeader } from '../components/SectionHeader';
 import { TextField } from '../components/TextField';
-import type { AppData, AttackType, DefenseType, Trait, TraitEffectType } from '../types';
+import { defaultUnitTags } from '../data/defaultTags';
+import type { AppData, AttackType, DefenseType, PassiveTraitEffectType, Trait, TraitEffectType } from '../types';
 import { createId } from '../utils/ids';
 
 interface TypesPageProps {
@@ -22,6 +23,15 @@ const effectLabels: Record<TraitEffectType, string> = {
   moveSpeedPercent: '이동속도 %',
 };
 
+const passiveEffectLabels: Record<PassiveTraitEffectType, string> = {
+  hpPercent: 'HP %',
+  attackPercent: '공격력 %',
+  defenseFlat: '방어력 고정값',
+  shieldPercent: '보호막 %',
+  moveSpeedPercent: '이동속도 %',
+  attackSpeedPercent: '공격속도 %',
+};
+
 export function TypesPage({ data, setData }: TypesPageProps) {
   const [attackId, setAttackId] = useState(data.attackTypes[0]?.id ?? '');
   const [defenseId, setDefenseId] = useState(data.defenseTypes[0]?.id ?? '');
@@ -29,6 +39,8 @@ export function TypesPage({ data, setData }: TypesPageProps) {
   const selectedAttack = data.attackTypes.find((type) => type.id === attackId) ?? data.attackTypes[0];
   const selectedDefense = data.defenseTypes.find((type) => type.id === defenseId) ?? data.defenseTypes[0];
   const selectedTrait = data.traits.find((trait) => trait.id === traitId) ?? data.traits[0];
+  const availableTags = [...new Set([...defaultUnitTags, ...data.units.flatMap((unit) => unit.tags ?? [])])];
+  const passiveEffect = selectedTrait?.effects?.[0] ?? { type: 'attackPercent' as const, value: 10 };
 
   const updateAttack = (patch: Partial<AttackType>) => {
     if (!selectedAttack) return;
@@ -52,6 +64,33 @@ export function TypesPage({ data, setData }: TypesPageProps) {
       ...current,
       traits: current.traits.map((trait) => (trait.id === selectedTrait.id ? { ...trait, ...patch } : trait)),
     }));
+  };
+
+  const updateTraitFilters = (patch: NonNullable<Trait['filters']>) => {
+    if (!selectedTrait) return;
+    updateTrait({
+      trigger: 'battleStart',
+      targetSide: 'ally',
+      filters: { ...(selectedTrait.filters ?? {}), ...patch },
+    });
+  };
+
+  const updatePassiveEffect = (patch: Partial<(typeof passiveEffect)>) => {
+    updateTrait({
+      trigger: 'battleStart',
+      targetSide: 'ally',
+      effects: [{ ...passiveEffect, ...patch }],
+    });
+  };
+
+  const toggleTraitTag = (tag: string) => {
+    if (!selectedTrait) return;
+    const currentTags = selectedTrait.filters?.tags ?? [];
+    updateTraitFilters({
+      tags: currentTags.includes(tag)
+        ? currentTags.filter((candidate) => candidate !== tag)
+        : [...currentTags, tag],
+    });
   };
 
   const addAttack = () => {
@@ -85,6 +124,10 @@ export function TypesPage({ data, setData }: TypesPageProps) {
           effectType: 'allAttackPercent',
           targetFilter: {},
           value: 10,
+          trigger: 'battleStart',
+          targetSide: 'ally',
+          filters: { tags: [] },
+          effects: [{ type: 'attackPercent', value: 10 }],
           notes: '',
         },
       ],
@@ -105,6 +148,8 @@ export function TypesPage({ data, setData }: TypesPageProps) {
         ...trait,
         targetFilter:
           trait.targetFilter.attackTypeId === selectedAttack.id ? { ...trait.targetFilter, attackTypeId: fallback } : trait.targetFilter,
+        filters:
+          trait.filters?.attackTypeId === selectedAttack.id ? { ...trait.filters, attackTypeId: fallback } : trait.filters,
       })),
     }));
     setAttackId(fallback);
@@ -125,6 +170,10 @@ export function TypesPage({ data, setData }: TypesPageProps) {
           trait.targetFilter.defenseTypeId === selectedDefense.id
             ? { ...trait.targetFilter, defenseTypeId: fallback }
             : trait.targetFilter,
+        filters:
+          trait.filters?.defenseTypeId === selectedDefense.id
+            ? { ...trait.filters, defenseTypeId: fallback }
+            : trait.filters,
       })),
     }));
     setDefenseId(fallback);
@@ -349,6 +398,114 @@ export function TypesPage({ data, setData }: TypesPageProps) {
             ) : null}
             <NumberStepper label="값" min={-100} onChange={(value) => updateTrait({ value })} value={selectedTrait.value} />
             <TextField label="메모" multiline onChange={(notes) => updateTrait({ notes })} value={selectedTrait.notes} />
+            <div className="rounded-md border border-line bg-[#0f141d] p-3">
+              <div className="mb-3">
+                <p className="text-sm font-bold text-cyan">태그 기반 패시브</p>
+                <p className="mt-1 text-xs text-muted">전투 시작 시 아군 유닛 중 필터에 맞는 대상에게 적용됩니다.</p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <span className="label">대상 태그</span>
+                  <div className="flex flex-wrap gap-2">
+                    {availableTags.map((tag) => {
+                      const checked = selectedTrait.filters?.tags?.includes(tag) ?? false;
+                      return (
+                        <button
+                          className={`min-h-11 rounded-md border px-3 py-2 text-sm font-semibold ${
+                            checked ? 'border-cyan bg-cyan/15 text-cyan' : 'border-line bg-[#10151f] text-muted'
+                          }`}
+                          key={tag}
+                          onClick={() => toggleTraitTag(tag)}
+                          type="button"
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="label">공격 타입 필터</span>
+                    <select
+                      className="field"
+                      onChange={(event) =>
+                        updateTraitFilters({ attackTypeId: event.target.value || undefined })
+                      }
+                      value={selectedTrait.filters?.attackTypeId ?? ''}
+                    >
+                      <option value="">전체</option>
+                      {data.attackTypes.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="label">방어 타입 필터</span>
+                    <select
+                      className="field"
+                      onChange={(event) =>
+                        updateTraitFilters({ defenseTypeId: event.target.value || undefined })
+                      }
+                      value={selectedTrait.filters?.defenseTypeId ?? ''}
+                    >
+                      <option value="">전체</option>
+                      {data.defenseTypes.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="label">영웅 필터</span>
+                    <select
+                      className="field"
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        updateTraitFilters({ isHero: value === '' ? undefined : value === 'true' });
+                      }}
+                      value={
+                        typeof selectedTrait.filters?.isHero === 'boolean'
+                          ? String(selectedTrait.filters.isHero)
+                          : ''
+                      }
+                    >
+                      <option value="">전체</option>
+                      <option value="true">영웅만</option>
+                      <option value="false">일반 유닛만</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="label">효과 타입</span>
+                    <select
+                      className="field"
+                      onChange={(event) =>
+                        updatePassiveEffect({ type: event.target.value as PassiveTraitEffectType })
+                      }
+                      value={passiveEffect.type}
+                    >
+                      {Object.entries(passiveEffectLabels).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <NumberStepper
+                  label="패시브 수치"
+                  min={-100}
+                  onChange={(value) => updatePassiveEffect({ value })}
+                  value={passiveEffect.value}
+                />
+              </div>
+            </div>
             <button className="btn btn-danger w-full" onClick={deleteTrait} type="button">
               <Trash2 size={16} />
               특성 삭제

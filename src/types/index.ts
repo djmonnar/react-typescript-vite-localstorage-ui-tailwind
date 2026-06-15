@@ -9,6 +9,26 @@ export type TraitEffectType =
   | 'productionSpeedPercent'
   | 'moveSpeedPercent';
 
+export type PassiveTraitEffectType =
+  | 'hpPercent'
+  | 'attackPercent'
+  | 'defenseFlat'
+  | 'shieldPercent'
+  | 'moveSpeedPercent'
+  | 'attackSpeedPercent';
+
+export interface TraitFilters {
+  tags?: string[];
+  attackTypeId?: Id;
+  defenseTypeId?: Id;
+  isHero?: boolean;
+}
+
+export interface PassiveTraitEffect {
+  type: PassiveTraitEffectType;
+  value: number;
+}
+
 export interface Race {
   id: Id;
   name: string;
@@ -38,6 +58,7 @@ export interface Unit {
   range: number;
   moveSpeed: number;
   attackSpeed: number;
+  tags: string[];
   skills: string;
   cost: number;
   buildTime: number;
@@ -76,6 +97,10 @@ export interface Trait {
     defenseTypeId?: Id;
   };
   value: number;
+  trigger?: 'battleStart';
+  targetSide?: 'ally';
+  filters?: TraitFilters;
+  effects?: PassiveTraitEffect[];
   notes: string;
 }
 
